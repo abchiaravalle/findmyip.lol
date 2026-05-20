@@ -4,7 +4,7 @@
   View source! No trackers, no analytics, no cookies. Verify it yourself.
   ============================================================================
   This page makes exactly TWO outbound requests after load:
-    1. ipwho.is (or ipapi.co fallback)  -> your IP + geolocation
+    1. ipinfo.io (or api.ipapi.is fallback)  -> your IP + geolocation
     2. uselessfacts.jsph.pl              -> a random fact
 
   Plus map tiles from tile.openstreetmap.org IF you scroll the map into view.
@@ -679,7 +679,7 @@
           <li>We don't set cookies.</li>
           <li>We don't use analytics — no Google, no Plausible, no Fathom, nothing.</li>
           <li>We aren't building a profile on you.</li>
-          <li>This page makes exactly two outbound requests on load: one to <code>ipwho.is</code> for your IP info, one to <code>uselessfacts.jsph.pl</code> for a fact. Map tiles from <code>tile.openstreetmap.org</code> load only if the map is on screen.</li>
+          <li>This page makes a handful of outbound requests on load: one to <code>ipinfo.io</code> for your IP info, one to <code>uselessfacts.jsph.pl</code> for a fact, and a small probe to <code>api.ipify.org</code> to see if you have a second IP family. Map tiles from <code>tile.openstreetmap.org</code> load only if the map is on screen.</li>
           <li>Open DevTools → Network tab and verify it yourself.</li>
         </ul>
         <p class="privacy-cta">
@@ -770,71 +770,79 @@
     }
 
     // ---- IP LOOKUP --------------------------------------------------------
-    // We try ipwho.is first (gives us IP + geo + ASN + ISP + timezone in one
-    // call, no auth). If it fails, we fall back to ipapi.co for the same info.
-    // Neither requires an API key.
+    // Primary:  ipinfo.io/json    — generous free tier, real CORS, no key.
+    // Fallback: api.ipapi.is/     — also CORS-enabled, no key, bonus VPN flags.
+    //
+    // (Earlier versions of this file used ipwho.is + ipapi.co. ipwho.is moved
+    // CORS to a paid plan, and ipapi.co rate-limits very aggressively, so they
+    // were swapped out. If both providers below ever break the same way, just
+    // replace these two functions — no other code needs to change.)
     async function fetchIpInfo() {
-      // Primary: ipwho.is
       try {
-        const r = await fetch('https://ipwho.is/?fields=ip,type,city,region,country,country_code,flag,latitude,longitude,connection,timezone,success,message');
+        const r = await fetch('https://ipinfo.io/json');
         if (r.ok) {
           const data = await r.json();
-          if (data && data.success !== false) {
-            return normalizeIpwho(data);
-          }
+          if (data && data.ip) return normalizeIpinfo(data);
         }
       } catch (_) { /* try fallback */ }
 
-      // Fallback: ipapi.co
       try {
-        const r = await fetch('https://ipapi.co/json/');
+        const r = await fetch('https://api.ipapi.is/');
         if (r.ok) {
           const data = await r.json();
-          if (data && !data.error) {
-            return normalizeIpapi(data);
-          }
+          if (data && data.ip) return normalizeIpapiIs(data);
         }
       } catch (_) { /* both failed */ }
 
       return null;
     }
 
-    function normalizeIpwho(d) {
+    // Turn a 2-letter country code into a flag emoji (regional indicators).
+    function ccToFlag(cc) {
+      cc = (cc || '').toUpperCase();
+      if (cc.length !== 2) return '';
+      return String.fromCodePoint(...[...cc].map(c => 0x1F1E6 - 65 + c.charCodeAt(0)));
+    }
+
+    function normalizeIpinfo(d) {
+      // d.loc is "lat,lon"; d.org is "ASxxxxx Provider Name" — split them out.
+      const [latStr, lonStr] = (d.loc || '').split(',');
+      const orgMatch = /^AS(\d+)\s+(.*)$/.exec(d.org || '');
+      const asn = orgMatch ? ('AS' + orgMatch[1]) : null;
+      const isp = orgMatch ? orgMatch[2] : (d.org || null);
       return {
         ip:       d.ip,
-        type:     d.type,                       // "IPv4" or "IPv6"
+        type:     (d.ip || '').includes(':') ? 'IPv6' : 'IPv4',
         city:     d.city,
         region:   d.region,
-        country:  d.country,
-        flag:     d.flag && d.flag.emoji ? d.flag.emoji : '',
-        lat:      d.latitude,
-        lon:      d.longitude,
-        isp:      d.connection && d.connection.isp,
-        org:      d.connection && d.connection.org,
-        asn:      d.connection && d.connection.asn ? ('AS' + d.connection.asn) : null,
-        timezone: d.timezone && d.timezone.id,
+        country:  d.country,             // ipinfo returns code, not name
+        flag:     ccToFlag(d.country),
+        lat:      latStr ? parseFloat(latStr) : null,
+        lon:      lonStr ? parseFloat(lonStr) : null,
+        isp:      isp,
+        org:      isp,
+        asn:      asn,
+        timezone: d.timezone,
       };
     }
 
-    function normalizeIpapi(d) {
-      // Convert ipapi.co's country code to flag emoji manually.
-      const cc = (d.country_code || '').toUpperCase();
-      const flag = cc.length === 2
-        ? String.fromCodePoint(...[...cc].map(c => 0x1F1E6 - 65 + c.charCodeAt(0)))
-        : '';
+    function normalizeIpapiIs(d) {
+      const loc = d.location || {};
+      const asnObj = d.asn || {};
+      const company = d.company || {};
       return {
         ip:       d.ip,
-        type:     (d.version === 6 || (d.ip || '').includes(':')) ? 'IPv6' : 'IPv4',
-        city:     d.city,
-        region:   d.region,
-        country:  d.country_name,
-        flag:     flag,
-        lat:      d.latitude,
-        lon:      d.longitude,
-        isp:      d.org,
-        org:      d.org,
-        asn:      d.asn,
-        timezone: d.timezone,
+        type:     (d.ip || '').includes(':') ? 'IPv6' : 'IPv4',
+        city:     loc.city,
+        region:   loc.state,
+        country:  loc.country,
+        flag:     ccToFlag(loc.country_code),
+        lat:      loc.latitude,
+        lon:      loc.longitude,
+        isp:      company.name || asnObj.org,
+        org:      company.name || asnObj.org,
+        asn:      asnObj.asn ? ('AS' + asnObj.asn) : null,
+        timezone: loc.timezone,
       };
     }
 

@@ -10,7 +10,7 @@
   Standards:    HTML5, CSS3, ES2022
   Components:   Leaflet 1.9.4 (vendored locally)
   Tiles:        OpenStreetMap
-  IP API:       ipwho.is (primary), ipapi.co (fallback)
+  IP API:       ipinfo.io (primary), api.ipapi.is (fallback)
   Facts API:    uselessfacts.jsph.pl
   Software:     None. Static HTML. No build step. No framework.
 

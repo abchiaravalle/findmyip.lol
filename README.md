@@ -59,7 +59,7 @@ Most "what is my IP" pages are advertising landfills with creepy data-collection
 - **HTML + CSS + vanilla JavaScript.** No framework, no bundler, no build step.
 - **[Leaflet 1.9.4](https://leafletjs.com/)** for the map, vendored locally in `/vendor` so nothing loads from a CDN.
 - **[OpenStreetMap](https://www.openstreetmap.org/)** tiles, attributed per their tile-usage policy.
-- **[ipwho.is](https://ipwho.is/)** for IP geolocation (primary), with **[ipapi.co](https://ipapi.co/)** as a fallback. Both are free and require no API key.
+- **[ipinfo.io](https://ipinfo.io/)** for IP geolocation (primary), with **[ipapi.is](https://ipapi.is/)** as a fallback. Both are free and require no API key.
 - **[uselessfacts.jsph.pl](https://uselessfacts.jsph.pl/)** for the random fact, with hardcoded fallbacks if the API is down.
 
 No npm install. No `node_modules`. No `package.json`. The deployed site is exactly what's in this repo.
@@ -123,7 +123,7 @@ This project's product is a no-tracking guarantee. Here is exactly what happens 
 
 The page makes these outbound requests on load:
 
-1. `https://ipwho.is/` — your IP + geolocation (fallback: `https://ipapi.co/json/`)
+1. `https://ipinfo.io/json` — your IP + geolocation (fallback: `https://api.ipapi.is/`)
 2. `https://api64.ipify.org` or `https://api.ipify.org` — best-effort lookup of the *other* IP family if you're dual-stack
 3. `https://uselessfacts.jsph.pl/api/v2/facts/random` — the random fact
 4. `https://tile.openstreetmap.org/...` — map tiles, **only** if you scroll the map into view

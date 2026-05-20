@@ -42,6 +42,11 @@
   <title>What is my IP? — Private IP lookup, no tracking · findmyip.lol</title>
   <meta name="description" content="The private way to check your IP address. Zero trackers, zero analytics, zero cookies, zero logs. Open source — read the code and verify it yourself.">
 
+  <!-- Site is served from findmyip.lol AND findmyip.amplifi.studio. Tell search
+       engines findmyip.lol is the canonical URL so duplicate-content rules don't
+       split ranking signals between the two hosts. -->
+  <link rel="canonical" href="https://findmyip.lol/">
+
   <!-- Open Graph / social cards. Image is a placeholder; replace og.png before launch. -->
   <meta property="og:title" content="What is my IP? — Private IP lookup, no tracking">
   <meta property="og:description" content="The private way to check your IP. Zero trackers, zero analytics, zero cookies, zero logs. Open source and view-source friendly.">

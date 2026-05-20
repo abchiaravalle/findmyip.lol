@@ -1,0 +1,21 @@
+# macOS
+.DS_Store
+._*
+
+# Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Logs (there shouldn't be any, but just in case)
+*.log
+
+# Local environment / secrets (this project doesn't use any, but defensively)
+.env
+.env.*
+!.env.example
+
+# OS / misc
+Thumbs.db

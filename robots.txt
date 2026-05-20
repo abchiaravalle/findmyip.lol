@@ -1,0 +1,5 @@
+# This site is meant to be found. Crawl away.
+User-agent: *
+Allow: /
+
+Sitemap: https://findmyip.lol/sitemap.xml

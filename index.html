@@ -1,0 +1,1018 @@
+<!doctype html>
+<!--
+  ============================================================================
+  View source! No trackers, no analytics, no cookies. Verify it yourself.
+  ============================================================================
+  This page makes exactly TWO outbound requests after load:
+    1. ipwho.is (or ipapi.co fallback)  -> your IP + geolocation
+    2. uselessfacts.jsph.pl              -> a random fact
+
+  Plus map tiles from tile.openstreetmap.org IF you scroll the map into view.
+
+  No Google Analytics. No Plausible. No Fathom. No first-party telemetry.
+  No cookies are set. No localStorage is read or written, except the theme
+  preference (your own choice, stored in your own browser, never sent anywhere).
+
+  Source: https://github.com/abchiaravalle/findmyip.lol
+  ============================================================================
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark light">
+
+  <title>What is my IP address? — findmyip.lol</title>
+  <meta name="description" content="Find your public IP address instantly. No tracking, no ads, no cookies, no analytics. Open source. Read the code if you don't trust us.">
+
+  <!-- Open Graph / social cards. Image is a placeholder; replace og.png before launch. -->
+  <meta property="og:title" content="What is my IP address? — findmyip.lol">
+  <meta property="og:description" content="Your IP, your location, no tracking. A privacy-respecting tool that logs nothing.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://findmyip.lol/">
+  <meta property="og:image" content="https://findmyip.lol/og.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="What is my IP address? — findmyip.lol">
+  <meta name="twitter:description" content="Your IP, your location, no tracking. A privacy-respecting tool that logs nothing.">
+  <meta name="twitter:image" content="https://findmyip.lol/og.png">
+
+  <!-- Leaflet is vendored locally (vendor/leaflet.{js,css}) — no third-party CDNs. -->
+  <link rel="stylesheet" href="vendor/leaflet.css">
+
+  <!-- Inline favicon: a single character, no extra request. -->
+  <link rel="icon" href="data:image/svg+xml,&lt;svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22&gt;&lt;text y=%22.9em%22 font-size=%2290%22&gt;🌐&lt;/text&gt;&lt;/svg&gt;">
+
+  <style>
+    /*
+      ----------------------------------------------------------------------
+      Design tokens. System font stack only — no Google Fonts, no webfonts,
+      no extra requests for typography.
+      ----------------------------------------------------------------------
+    */
+    :root {
+      --bg:        #0a0a0a;
+      --bg-card:   #141414;
+      --bg-input:  #1c1c1c;
+      --fg:        #ededed;
+      --fg-muted:  #8a8a8a;
+      --fg-dim:    #555;
+      --border:    #242424;
+      --accent:    #5eead4;   /* muted cyan — terminal-friendly */
+      --accent-dim:#2dd4bf33;
+      --danger:    #f87171;
+
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+      --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+
+      --max-width: 720px;
+      --radius:    10px;
+      --radius-sm: 6px;
+    }
+
+    /* Light mode: applied via prefers-color-scheme or manual toggle. */
+    [data-theme="light"] {
+      --bg:        #faf9f6;
+      --bg-card:   #ffffff;
+      --bg-input:  #f1efe9;
+      --fg:        #1a1a1a;
+      --fg-muted:  #6b6b6b;
+      --fg-dim:    #aaa;
+      --border:    #e6e3dc;
+      --accent:    #0d9488;
+      --accent-dim:#0d948822;
+    }
+
+    @media (prefers-color-scheme: light) {
+      :root:not([data-theme="dark"]) {
+        --bg:        #faf9f6;
+        --bg-card:   #ffffff;
+        --bg-input:  #f1efe9;
+        --fg:        #1a1a1a;
+        --fg-muted:  #6b6b6b;
+        --fg-dim:    #aaa;
+        --border:    #e6e3dc;
+        --accent:    #0d9488;
+        --accent-dim:#0d948822;
+      }
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+
+    html, body { margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--fg);
+      font-family: var(--font-sans);
+      font-size: 16px;
+      line-height: 1.55;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      min-height: 100vh;
+      padding: 2rem 1.25rem 4rem;
+      transition: background-color .2s ease, color .2s ease;
+    }
+
+    .container {
+      max-width: var(--max-width);
+      margin: 0 auto;
+    }
+
+    /* ---------- Header ---------- */
+
+    header.site-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 3rem;
+      font-family: var(--font-mono);
+      font-size: 0.875rem;
+      color: var(--fg-muted);
+    }
+
+    header.site-header .brand {
+      color: var(--fg);
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+    header.site-header .brand:hover { color: var(--accent); }
+    header.site-header .brand .domain {
+      font-family: var(--font-mono);
+      font-size: 0.875rem;
+      color: var(--fg-muted);
+      letter-spacing: -0.01em;
+    }
+    header.site-header .brand:hover .domain { color: var(--accent); }
+
+    /* Inline amplifi wordmark — adapts to currentColor for theming. */
+    .amplifi-mark {
+      height: 22px;
+      width: auto;
+      display: block;
+    }
+    .amplifi-mark .am-wordmark { fill: currentColor; }
+    .amplifi-mark .am-accent   { fill: var(--accent); }
+
+    .header-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .icon-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 34px;
+      height: 34px;
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--fg-muted);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: all .15s ease;
+      text-decoration: none;
+    }
+    .icon-btn:hover { color: var(--accent); border-color: var(--accent); }
+    .icon-btn svg { width: 18px; height: 18px; }
+
+    .theme-toggle {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--fg-muted);
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      padding: 0 0.7rem;
+      height: 34px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: all .15s ease;
+    }
+    .theme-toggle:hover { color: var(--accent); border-color: var(--accent); }
+
+    /* ---------- Hero: the IP address ---------- */
+
+    section.hero {
+      text-align: center;
+      margin-bottom: 4rem;
+    }
+
+    .hero .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--fg-muted);
+      margin-bottom: 1rem;
+    }
+
+    .ip-display {
+      font-family: var(--font-mono);
+      font-weight: 600;
+      font-size: clamp(1.75rem, 7vw, 3.5rem);
+      letter-spacing: -0.02em;
+      line-height: 1.1;
+      color: var(--fg);
+      background: transparent;
+      border: none;
+      padding: 0.5rem 0.75rem;
+      cursor: pointer;
+      border-radius: var(--radius);
+      transition: background-color .15s ease, color .15s ease;
+      word-break: break-all;
+      display: inline-block;
+      max-width: 100%;
+    }
+    .ip-display:hover {
+      background: var(--accent-dim);
+      color: var(--accent);
+    }
+    .ip-display.copied {
+      background: var(--accent-dim);
+      color: var(--accent);
+    }
+    .ip-display:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 4px;
+    }
+
+    .ip-label {
+      display: block;
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--fg-dim);
+      margin-top: 0.25rem;
+    }
+
+    .ip-block { margin: 0.5rem 0 1.5rem; }
+    .ip-block + .ip-block { margin-top: 1.25rem; }
+
+    .copy-hint {
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      color: var(--fg-muted);
+      margin-top: 1rem;
+      min-height: 1.2em;
+    }
+
+    .copy-curl {
+      display: inline-block;
+      margin-top: 1.5rem;
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      color: var(--fg-muted);
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      padding: 0.5rem 0.9rem;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: all .15s ease;
+    }
+    .copy-curl::before { content: "$ "; color: var(--accent); }
+    .copy-curl:hover { color: var(--fg); border-color: var(--accent); }
+
+    /* Skeleton loader for IP — pulses while loading. */
+    .skeleton {
+      display: inline-block;
+      background: var(--bg-input);
+      border-radius: var(--radius);
+      animation: pulse 1.4s ease-in-out infinite;
+      color: transparent;
+      user-select: none;
+    }
+    .skeleton-ip { width: min(420px, 80vw); height: 1.1em; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 0.5; }
+      50%      { opacity: 0.9; }
+    }
+
+    /* ---------- Card primitive ---------- */
+
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+      margin-bottom: 1.25rem;
+      opacity: 0;
+      transform: translateY(6px);
+      animation: fade-in .4s ease forwards;
+    }
+    .card.delay-1 { animation-delay: .1s; }
+    .card.delay-2 { animation-delay: .2s; }
+    .card.delay-3 { animation-delay: .3s; }
+
+    @keyframes fade-in {
+      to { opacity: 1; transform: none; }
+    }
+
+    .card h2 {
+      font-size: 0.85rem;
+      font-family: var(--font-mono);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--fg-muted);
+      margin: 0 0 1rem;
+      font-weight: 500;
+    }
+
+    /* ---------- Location card ---------- */
+
+    .info-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 0.75rem 1.5rem;
+    }
+    @media (min-width: 480px) {
+      .info-grid { grid-template-columns: max-content 1fr; }
+    }
+
+    .info-grid dt {
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      color: var(--fg-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .info-grid dd {
+      margin: 0;
+      font-family: var(--font-mono);
+      color: var(--fg);
+      word-break: break-word;
+    }
+
+    .vpn-notice {
+      margin-top: 1.25rem;
+      padding: 0.85rem 1rem;
+      border-radius: var(--radius-sm);
+      font-size: 0.9rem;
+      background: var(--bg-input);
+      border-left: 3px solid var(--accent);
+    }
+    .vpn-notice.match { border-left-color: var(--fg-dim); color: var(--fg-muted); }
+
+    /* ---------- Map ---------- */
+
+    .map-wrap {
+      margin-top: 1.25rem;
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    #map {
+      height: 300px;
+      width: 100%;
+      background: var(--bg-input);
+    }
+
+    .map-disclaimer {
+      font-size: 0.8rem;
+      color: var(--fg-muted);
+      margin-top: 0.75rem;
+      line-height: 1.5;
+    }
+
+    /* Leaflet attribution should match our muted style. */
+    .leaflet-control-attribution {
+      font-size: 10px !important;
+      background: rgba(20, 20, 20, 0.7) !important;
+      color: #aaa !important;
+    }
+    .leaflet-control-attribution a { color: var(--accent) !important; }
+    [data-theme="light"] .leaflet-control-attribution {
+      background: rgba(255, 255, 255, 0.8) !important;
+      color: #555 !important;
+    }
+
+    /* ---------- Fact card ---------- */
+
+    .fact-text {
+      font-size: 1.05rem;
+      line-height: 1.6;
+      color: var(--fg);
+      margin: 0 0 1rem;
+      min-height: 3em;
+    }
+
+    .fact-button {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--fg);
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      padding: 0.5rem 0.9rem;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: all .15s ease;
+    }
+    .fact-button:hover {
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+    .fact-button:hover .dice {
+      transform: rotate(15deg);
+    }
+    .fact-button:disabled { opacity: 0.5; cursor: wait; }
+    .dice {
+      display: inline-block;
+      transition: transform .2s ease;
+    }
+
+    /* ---------- "What we don't know" card ---------- */
+
+    .privacy-card { border-color: var(--accent-dim); }
+
+    .privacy-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .privacy-list li {
+      padding: 0.5rem 0 0.5rem 1.75rem;
+      position: relative;
+      font-size: 0.95rem;
+      line-height: 1.5;
+    }
+    .privacy-list li::before {
+      content: "✓";
+      position: absolute;
+      left: 0;
+      top: 0.5rem;
+      color: var(--accent);
+      font-weight: 700;
+    }
+    .privacy-list code {
+      font-family: var(--font-mono);
+      font-size: 0.85em;
+      background: var(--bg-input);
+      padding: 0.1em 0.35em;
+      border-radius: 4px;
+    }
+    .privacy-cta {
+      margin-top: 1.25rem;
+      padding-top: 1.25rem;
+      border-top: 1px solid var(--border);
+      font-size: 0.95rem;
+      color: var(--fg-muted);
+    }
+    .privacy-cta a {
+      color: var(--accent);
+      text-decoration: none;
+      border-bottom: 1px dashed var(--accent-dim);
+    }
+    .privacy-cta a:hover { border-bottom-style: solid; }
+
+    /* ---------- Footer ---------- */
+
+    footer.site-footer {
+      margin-top: 4rem;
+      padding-top: 2rem;
+      border-top: 1px solid var(--border);
+      text-align: center;
+      font-size: 0.875rem;
+      color: var(--fg-muted);
+      font-family: var(--font-mono);
+    }
+    footer.site-footer a {
+      color: var(--fg);
+      text-decoration: none;
+      border-bottom: 1px dashed var(--fg-dim);
+    }
+    footer.site-footer a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+
+    /* ---------- Error states ---------- */
+
+    .error {
+      color: var(--danger);
+      font-family: var(--font-mono);
+      font-size: 0.95rem;
+    }
+
+    /* ---------- Noscript ---------- */
+
+    .noscript-msg {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: var(--radius);
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 2rem;
+      font-size: 0.95rem;
+      line-height: 1.6;
+    }
+
+    /* Reduce motion respectfully. */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <header class="site-header">
+      <a href="/" class="brand" aria-label="findmyip.lol — by amplifi.studio">
+        <!--
+          Amplifi wordmark, inlined so it adapts to light/dark themes via
+          currentColor. The green accent (a + dot) uses --accent so it
+          harmonizes with the rest of the UI in light mode.
+        -->
+        <svg class="amplifi-mark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 144" aria-hidden="true">
+          <g>
+            <polygon class="am-accent" points="66.26 89.33 66.26 57.43 34.36 57.43 66.26 89.33"/>
+            <g>
+              <path class="am-wordmark" d="M25.32,63.27v24.8c0,5.13,4.16,9.29,9.29,9.29h24.8L25.32,63.27Z"/>
+              <path class="am-wordmark" d="M82.09,32.3H25.32v14.69h50.02c.37,0,.69.13.95.39.26.26.39.58.39.95v49.01h14.69v-55.76c0-5.13-4.16-9.29-9.29-9.29Z"/>
+            </g>
+          </g>
+          <rect class="am-accent" x="239.49" y="91.44" width="94.75" height="23.73" rx="2.21" ry="2.21"/>
+          <g>
+            <rect class="am-wordmark" x="279.27" y="47.48" width="9.81" height="35.88"/>
+            <path class="am-wordmark" d="M284.18,32.3c-1.59,0-2.9.55-3.94,1.63-1.04,1.09-1.56,2.4-1.56,3.94s.52,2.91,1.56,3.97c1.04,1.07,2.35,1.6,3.94,1.6s2.96-.53,3.97-1.6c1.02-1.06,1.52-2.39,1.52-3.97s-.51-2.85-1.52-3.94c-1.02-1.09-2.34-1.63-3.97-1.63Z"/>
+            <path class="am-wordmark" d="M311.65,42.13c0-1.34.36-2.39,1.08-3.16.72-.77,1.72-1.15,3.01-1.15.69,0,1.3.09,1.82.26.94.31,1.67.94,2.35,1.62,0-.16-.03-.31-.03-.47,0-2.71.9-4.99,2.69-6.83.37-.38.76-.71,1.17-1.01-1.03-.73-2.1-1.32-3.21-1.75-1.41-.54-3.01-.82-4.79-.82-2.82,0-5.26.61-7.32,1.82-2.06,1.21-3.65,2.85-4.79,4.9-1.14,2.06-1.71,4.37-1.71,6.94v4.98h-8.32v8.54h8.32v27.34h9.73v-27.34h12.85v27.34h9.73v-35.88h-22.58v-5.35Z"/>
+            <path class="am-wordmark" d="M325.51,41.88c1.01,1.04,2.29,1.56,3.82,1.56s2.87-.52,3.86-1.56c.99-1.04,1.48-2.33,1.48-3.86s-.49-2.82-1.48-3.86c-.99-1.04-2.28-1.56-3.86-1.56s-2.81.52-3.82,1.56c-1.02,1.04-1.52,2.33-1.52,3.86s.51,2.82,1.52,3.86Z"/>
+            <path class="am-wordmark" d="M138.97,50.93c-.99-1.05-2.14-1.94-3.49-2.64-2.03-1.04-4.33-1.56-6.91-1.56-3.27,0-6.22.82-8.84,2.45-2.63,1.63-4.68,3.86-6.17,6.68-1.48,2.82-2.23,6.02-2.23,9.58s.74,6.68,2.23,9.51c1.49,2.82,3.54,5.05,6.17,6.69,2.62,1.63,5.57,2.45,8.84,2.45,2.58,0,4.88-.53,6.91-1.6,1.35-.71,2.5-1.6,3.49-2.65v3.5h9.66v-35.88h-9.66v3.45ZM136.97,72.4c-1.68,1.81-3.89,2.71-6.61,2.71-1.78,0-3.35-.41-4.72-1.22-1.36-.82-2.43-1.96-3.19-3.42-.77-1.46-1.15-3.16-1.15-5.09s.38-3.55,1.15-5.01c.77-1.46,1.83-2.6,3.19-3.42,1.36-.82,2.93-1.23,4.72-1.23s3.43.41,4.79,1.23c1.36.82,2.43,1.96,3.19,3.42.77,1.46,1.15,3.13,1.15,5.01,0,2.87-.84,5.21-2.53,7.02Z"/>
+            <path class="am-wordmark" d="M205.76,48.41c-2.13-1.11-4.53-1.67-7.21-1.67s-5.1.58-7.28,1.74c-1.74.93-3.2,2.17-4.4,3.7-1.11-1.57-2.51-2.84-4.21-3.78-2.03-1.11-4.28-1.67-6.76-1.67-2.63,0-4.98.56-7.06,1.67-1.12.6-2.1,1.34-2.97,2.21v-3.13h-9.73v35.88h9.73v-21.17c0-1.39.3-2.57.89-3.57.6-.99,1.41-1.74,2.45-2.27,1.04-.52,2.2-.78,3.49-.78,1.93,0,3.55.58,4.87,1.75,1.31,1.16,1.97,2.79,1.97,4.87v21.17h9.73v-21.17c0-1.39.3-2.57.89-3.57.59-.99,1.42-1.74,2.49-2.27,1.06-.52,2.21-.78,3.45-.78,1.93,0,3.55.58,4.87,1.75,1.31,1.16,1.97,2.79,1.97,4.87v21.17h9.73v-22.73c0-2.87-.62-5.35-1.86-7.43-1.24-2.08-2.92-3.68-5.05-4.79Z"/>
+            <path class="am-wordmark" d="M248.4,49.19c-2.63-1.64-5.6-2.45-8.92-2.45-2.58,0-4.89.55-6.95,1.63-1.22.65-2.29,1.45-3.23,2.37v-3.26h-9.73v49.87h9.66v-17.2c.94.91,2.02,1.71,3.27,2.34,2.08,1.06,4.41,1.6,6.98,1.6,3.32,0,6.29-.82,8.92-2.45,2.62-1.64,4.69-3.86,6.2-6.69,1.51-2.82,2.27-5.99,2.27-9.51s-.76-6.76-2.27-9.58c-1.51-2.82-3.58-5.05-6.2-6.68ZM245.76,70.47c-.77,1.46-1.85,2.6-3.23,3.42-1.39.82-2.97,1.22-4.75,1.22s-3.36-.41-4.72-1.22c-1.36-.82-2.43-1.96-3.19-3.42-.77-1.46-1.15-3.16-1.15-5.09s.38-3.55,1.15-5.01c.77-1.46,1.84-2.6,3.23-3.42,1.39-.82,2.95-1.23,4.68-1.23s3.37.41,4.75,1.23c1.38.82,2.46,1.96,3.23,3.42.77,1.46,1.15,3.13,1.15,5.01s-.38,3.63-1.15,5.09Z"/>
+            <rect class="am-wordmark" x="261.53" y="29.65" width="9.73" height="53.71"/>
+          </g>
+          <g class="am-wordmark">
+            <path d="M254.33,103.26c-.31-.25-.64-.45-1.01-.6-.37-.16-.73-.29-1.1-.42-.37-.12-.7-.25-1.01-.39-.31-.13-.55-.29-.74-.48s-.28-.43-.28-.73c0-.35.14-.62.42-.81.28-.19.66-.28,1.15-.28.42,0,.8.08,1.14.25.34.16.66.42.98.77l1.4-1.4c-.38-.44-.87-.81-1.47-1.09-.6-.28-1.27-.42-2.02-.42-.7,0-1.33.12-1.89.37-.56.25-1,.6-1.32,1.07s-.48,1.03-.48,1.69c0,.56.09,1.02.28,1.39s.43.67.74.9c.3.23.64.43,1.01.58.37.15.73.29,1.1.41.37.12.7.25,1.01.4.3.14.55.32.74.53s.28.48.28.81c0,.38-.16.68-.49.9-.32.22-.76.33-1.31.33-.61,0-1.13-.12-1.55-.35-.42-.23-.8-.56-1.12-.98l-1.39,1.4c.51.6,1.07,1.05,1.7,1.35.62.3,1.38.45,2.26.45,1.24,0,2.22-.29,2.93-.87.71-.58,1.07-1.37,1.07-2.39,0-.57-.09-1.05-.28-1.43-.19-.39-.43-.71-.74-.95Z"/>
+            <polygon points="260.69 99.73 264.17 99.73 264.17 108.75 266.29 108.75 266.29 99.73 269.77 99.73 269.77 97.85 260.69 97.85 260.69 99.73"/>
+            <path d="M282.1,104.61c0,.48-.1.89-.3,1.24-.2.35-.47.62-.81.81-.34.19-.74.29-1.18.29s-.83-.1-1.19-.29-.64-.46-.84-.81c-.2-.35-.3-.77-.3-1.26v-6.75h-2.11v6.68c0,.84.19,1.59.57,2.25s.91,1.18,1.57,1.56c.67.38,1.43.57,2.29.57s1.63-.19,2.29-.57c.66-.38,1.18-.89,1.56-1.55.38-.66.57-1.4.57-2.24v-6.7h-2.12v6.76Z"/>
+            <path d="M299.1,99.39c-.51-.49-1.11-.87-1.8-1.14-.69-.27-1.43-.4-2.24-.4h-4.25v10.9h4.28c.8,0,1.54-.13,2.23-.4.69-.27,1.28-.65,1.79-1.14.51-.49.9-1.07,1.19-1.74.28-.67.43-1.39.43-2.18s-.14-1.51-.43-2.17c-.28-.66-.68-1.24-1.19-1.73ZM298.11,105.18c-.29.54-.71.95-1.23,1.25-.53.29-1.14.44-1.84.44h-2.11v-7.15h2.11c.69,0,1.3.15,1.83.44.53.29.94.71,1.24,1.24s.45,1.16.45,1.87-.15,1.37-.44,1.91Z"/>
+            <rect x="306.83" y="97.85" width="2.11" height="10.9"/>
+            <path d="M325.9,101.09c-.29-.68-.69-1.28-1.2-1.79s-1.11-.91-1.79-1.19c-.68-.28-1.43-.43-2.23-.43s-1.53.14-2.22.43c-.68.28-1.28.68-1.79,1.19s-.91,1.11-1.19,1.78-.43,1.41-.43,2.19.14,1.52.43,2.21c.29.69.69,1.29,1.2,1.8s1.11.91,1.8,1.2c.69.29,1.43.43,2.22.43s1.53-.14,2.21-.43c.68-.29,1.27-.69,1.78-1.2s.91-1.11,1.2-1.79c.29-.68.43-1.42.43-2.2s-.15-1.52-.43-2.2ZM323.72,105.2c-.29.55-.7.98-1.22,1.29s-1.13.47-1.83.47c-.51,0-.97-.09-1.4-.26-.43-.18-.8-.42-1.1-.74-.3-.32-.54-.71-.71-1.16-.17-.45-.26-.96-.26-1.5,0-.72.15-1.36.44-1.91s.7-.97,1.23-1.28c.52-.3,1.12-.46,1.81-.46.53,0,1,.09,1.43.26s.79.43,1.1.75c.31.33.55.71.71,1.16s.25.94.25,1.47c0,.73-.15,1.38-.44,1.92Z"/>
+          </g>
+        </svg>
+        <span class="domain">/ findmyip.lol</span>
+      </a>
+      <div class="header-actions">
+        <a class="icon-btn" id="githubLink" href="https://github.com/abchiaravalle/findmyip.lol" target="_blank" rel="noopener noreferrer" aria-label="View source on GitHub" title="View source on GitHub">
+          <!-- GitHub mark, inlined. Single-color, uses currentColor. -->
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+            <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
+          </svg>
+        </a>
+        <button class="theme-toggle" type="button" id="themeToggle" aria-label="Toggle color theme">theme</button>
+      </div>
+    </header>
+
+    <noscript>
+      <div class="noscript-msg">
+        <strong>JavaScript is disabled.</strong> This page needs JavaScript to ask the IP-lookup API
+        what your address is — that's the whole point. We don't run any server, so we can't do the
+        lookup for you. No tracking JS, just one fetch call. Source:
+        <a href="https://github.com/abchiaravalle/findmyip.lol">github</a>.
+      </div>
+    </noscript>
+
+    <main>
+
+      <!-- ================================================================
+           1. HERO — the answer, big and clear.
+           ================================================================ -->
+      <section class="hero" aria-labelledby="ip-heading">
+        <p class="eyebrow" id="ip-heading">Your public IP address is</p>
+
+        <div id="ipBlocks">
+          <!-- Initial skeleton state, replaced by JS once data loads. -->
+          <div class="ip-block">
+            <span class="ip-display skeleton skeleton-ip" aria-hidden="true">0.0.0.0</span>
+          </div>
+        </div>
+
+        <div class="copy-hint" id="copyHint" aria-live="polite">Click the address to copy</div>
+
+        <button class="copy-curl" type="button" id="copyCurl" title="Copy a terminal command that prints your IP">
+          curl ifconfig.me
+        </button>
+      </section>
+
+      <!-- ================================================================
+           2. LOCATION + NETWORK + MAP
+           ================================================================ -->
+      <section class="card delay-1" aria-labelledby="loc-heading">
+        <h2 id="loc-heading">Location &amp; Network</h2>
+
+        <dl class="info-grid" id="locationInfo">
+          <dt>Location</dt> <dd id="loc-location">—</dd>
+          <dt>ISP</dt>      <dd id="loc-isp">—</dd>
+          <dt>ASN</dt>      <dd id="loc-asn">—</dd>
+          <dt>Timezone</dt> <dd id="loc-tz">—</dd>
+        </dl>
+
+        <div class="vpn-notice" id="vpnNotice" hidden></div>
+
+        <div class="map-wrap">
+          <div id="map" role="img" aria-label="Map showing the approximate location reported by your IP address"></div>
+        </div>
+        <p class="map-disclaimer">
+          This is your ISP's approximate location, not yours. IP geolocation is often
+          off by tens or hundreds of miles. The pin is a guess, not a tracker.
+        </p>
+      </section>
+
+      <!-- ================================================================
+           3. WEIRD FACT — because why not.
+           ================================================================ -->
+      <section class="card delay-2" aria-labelledby="fact-heading">
+        <h2 id="fact-heading">Weird fact of the moment</h2>
+        <p class="fact-text" id="factText">Loading…</p>
+        <button class="fact-button" type="button" id="factButton">
+          <span class="dice" aria-hidden="true">🎲</span>
+          <span>Another one</span>
+        </button>
+      </section>
+
+      <!-- ================================================================
+           4. THE DIFFERENTIATION — what we DON'T know.
+           ================================================================ -->
+      <section class="card privacy-card delay-3" aria-labelledby="privacy-heading">
+        <h2 id="privacy-heading">What we don't know about you</h2>
+        <ul class="privacy-list">
+          <li>We didn't log this request — there's no server-side code at all.</li>
+          <li>We don't know your browser fingerprint.</li>
+          <li>We don't set cookies.</li>
+          <li>We don't use analytics — no Google, no Plausible, no Fathom, nothing.</li>
+          <li>We aren't building a profile on you.</li>
+          <li>This page makes exactly two outbound requests on load: one to <code>ipwho.is</code> for your IP info, one to <code>uselessfacts.jsph.pl</code> for a fact. Map tiles from <code>tile.openstreetmap.org</code> load only if the map is on screen.</li>
+          <li>Open DevTools → Network tab and verify it yourself.</li>
+        </ul>
+        <p class="privacy-cta">
+          View the source on <a href="https://github.com/abchiaravalle/findmyip.lol" id="sourceLink" target="_blank" rel="noopener noreferrer">GitHub</a> — if you don't trust us, read it.
+        </p>
+      </section>
+
+    </main>
+
+    <footer class="site-footer">
+      Built by <a href="https://amplifi.studio">Amplifi Studio</a> — we build privacy-respecting web tools.
+    </footer>
+
+  </div>
+
+  <!-- Vendored Leaflet. No CDN. -->
+  <script src="vendor/leaflet.js"></script>
+
+  <script>
+    /* =========================================================================
+       findmyip.lol — main script
+       -------------------------------------------------------------------------
+       Everything that follows runs in your browser, not on a server. There is
+       no server. This file is served as a static asset. We do not — and cannot
+       — log anything.
+       =========================================================================
+    */
+
+    // ---- THEME ------------------------------------------------------------
+    // The user's theme preference is the ONLY thing we persist, and we use
+    // localStorage (which never leaves the browser) — never a cookie.
+    (function setupTheme() {
+      const KEY = 'findmyip-theme';
+      const root = document.documentElement;
+      const btn  = document.getElementById('themeToggle');
+
+      const stored = (() => {
+        try { return localStorage.getItem(KEY); } catch (_) { return null; }
+      })();
+      if (stored === 'light' || stored === 'dark') {
+        root.setAttribute('data-theme', stored);
+      }
+
+      btn.addEventListener('click', () => {
+        const current = root.getAttribute('data-theme')
+          || (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+        const next = current === 'light' ? 'dark' : 'light';
+        root.setAttribute('data-theme', next);
+        try { localStorage.setItem(KEY, next); } catch (_) { /* private mode, ignore */ }
+      });
+    })();
+
+    // ---- COPY HELPERS -----------------------------------------------------
+    // navigator.clipboard.writeText works on HTTPS and localhost. For local
+    // file:// previews we fall back to a hidden textarea + execCommand.
+    async function copyToClipboard(text) {
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(text);
+          return true;
+        }
+      } catch (_) { /* fall through */ }
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        const ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        return ok;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    function flashCopied(el, message) {
+      const hint = document.getElementById('copyHint');
+      const prev = hint.textContent;
+      hint.textContent = message || 'Copied!';
+      el.classList.add('copied');
+      clearTimeout(flashCopied._t);
+      flashCopied._t = setTimeout(() => {
+        hint.textContent = prev;
+        el.classList.remove('copied');
+      }, 1400);
+    }
+
+    // ---- IP LOOKUP --------------------------------------------------------
+    // We try ipwho.is first (gives us IP + geo + ASN + ISP + timezone in one
+    // call, no auth). If it fails, we fall back to ipapi.co for the same info.
+    // Neither requires an API key.
+    async function fetchIpInfo() {
+      // Primary: ipwho.is
+      try {
+        const r = await fetch('https://ipwho.is/?fields=ip,type,city,region,country,country_code,flag,latitude,longitude,connection,timezone,success,message');
+        if (r.ok) {
+          const data = await r.json();
+          if (data && data.success !== false) {
+            return normalizeIpwho(data);
+          }
+        }
+      } catch (_) { /* try fallback */ }
+
+      // Fallback: ipapi.co
+      try {
+        const r = await fetch('https://ipapi.co/json/');
+        if (r.ok) {
+          const data = await r.json();
+          if (data && !data.error) {
+            return normalizeIpapi(data);
+          }
+        }
+      } catch (_) { /* both failed */ }
+
+      return null;
+    }
+
+    function normalizeIpwho(d) {
+      return {
+        ip:       d.ip,
+        type:     d.type,                       // "IPv4" or "IPv6"
+        city:     d.city,
+        region:   d.region,
+        country:  d.country,
+        flag:     d.flag && d.flag.emoji ? d.flag.emoji : '',
+        lat:      d.latitude,
+        lon:      d.longitude,
+        isp:      d.connection && d.connection.isp,
+        org:      d.connection && d.connection.org,
+        asn:      d.connection && d.connection.asn ? ('AS' + d.connection.asn) : null,
+        timezone: d.timezone && d.timezone.id,
+      };
+    }
+
+    function normalizeIpapi(d) {
+      // Convert ipapi.co's country code to flag emoji manually.
+      const cc = (d.country_code || '').toUpperCase();
+      const flag = cc.length === 2
+        ? String.fromCodePoint(...[...cc].map(c => 0x1F1E6 - 65 + c.charCodeAt(0)))
+        : '';
+      return {
+        ip:       d.ip,
+        type:     (d.version === 6 || (d.ip || '').includes(':')) ? 'IPv6' : 'IPv4',
+        city:     d.city,
+        region:   d.region,
+        country:  d.country_name,
+        flag:     flag,
+        lat:      d.latitude,
+        lon:      d.longitude,
+        isp:      d.org,
+        org:      d.org,
+        asn:      d.asn,
+        timezone: d.timezone,
+      };
+    }
+
+    // Also try to detect IPv6 if the primary lookup gave us IPv4 (and vice
+    // versa). Many ISPs expose both; we try a v6-only endpoint as a best-effort
+    // probe. Failure is silent — we just show whichever address(es) we found.
+    async function fetchOtherFamily(haveType) {
+      const url = haveType === 'IPv4'
+        ? 'https://api64.ipify.org?format=json'   // returns v6 if available
+        : 'https://api.ipify.org?format=json';    // v4
+      try {
+        const r = await fetch(url);
+        if (!r.ok) return null;
+        const j = await r.json();
+        return j && j.ip ? j.ip : null;
+      } catch (_) { return null; }
+    }
+
+    // ---- IP RENDERING -----------------------------------------------------
+    function renderIp(blocks) {
+      // blocks: [{ label: "IPv4"|"IPv6", value: "1.2.3.4" }, ...]
+      const container = document.getElementById('ipBlocks');
+      container.innerHTML = '';
+      blocks.forEach(({ label, value }) => {
+        const wrap = document.createElement('div');
+        wrap.className = 'ip-block';
+
+        const btn = document.createElement('button');
+        btn.className = 'ip-display';
+        btn.type = 'button';
+        btn.textContent = value;
+        btn.setAttribute('aria-label', `${label} address ${value}, click to copy`);
+        btn.addEventListener('click', async () => {
+          if (await copyToClipboard(value)) flashCopied(btn, `Copied ${label}!`);
+          else flashCopied(btn, 'Copy failed — select & copy manually');
+        });
+
+        const lbl = document.createElement('span');
+        lbl.className = 'ip-label';
+        lbl.textContent = label;
+
+        wrap.appendChild(btn);
+        wrap.appendChild(lbl);
+        container.appendChild(wrap);
+      });
+    }
+
+    function renderIpError() {
+      const container = document.getElementById('ipBlocks');
+      container.innerHTML =
+        '<p class="error">Could not look up your IP — both providers failed. ' +
+        'Check your connection and try again.</p>';
+    }
+
+    // ---- LOCATION CARD ----------------------------------------------------
+    function renderLocation(info) {
+      const fmt = (v) => v == null || v === '' ? '—' : v;
+
+      const locParts = [info.city, info.region, info.country].filter(Boolean).join(', ');
+      const locWithFlag = info.flag ? `${info.flag} ${locParts}` : locParts;
+
+      document.getElementById('loc-location').textContent = fmt(locWithFlag);
+      document.getElementById('loc-isp').textContent      = fmt(info.isp || info.org);
+      document.getElementById('loc-asn').textContent      = fmt(info.asn);
+      document.getElementById('loc-tz').textContent       = fmt(info.timezone);
+
+      // VPN/proxy heuristic: compare browser timezone to IP timezone.
+      // Imperfect (some VPNs spoof, some users travel) but a useful signal.
+      const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const notice = document.getElementById('vpnNotice');
+      if (info.timezone && browserTz) {
+        if (info.timezone === browserTz) {
+          notice.textContent = `✓ Browser timezone (${browserTz}) matches your IP's timezone.`;
+          notice.classList.add('match');
+        } else {
+          notice.textContent =
+            `🛡️ Looks like you might be using a VPN or proxy — your browser timezone ` +
+            `(${browserTz}) doesn't match your IP's timezone (${info.timezone}).`;
+          notice.classList.remove('match');
+        }
+        notice.hidden = false;
+      }
+    }
+
+    // ---- MAP --------------------------------------------------------------
+    // Initialized lazily — map tiles are the heaviest network cost, so we
+    // only request them once the user can actually see the map.
+    let mapInitialized = false;
+    function initMap(lat, lon, label) {
+      if (mapInitialized || typeof L === 'undefined') return;
+      if (typeof lat !== 'number' || typeof lon !== 'number') return;
+      mapInitialized = true;
+
+      const map = L.map('map', {
+        zoomControl: true,
+        attributionControl: true,
+        scrollWheelZoom: false,    // don't hijack page scroll
+      }).setView([lat, lon], 10);
+
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        // OSM tile usage policy requires attribution.
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        maxZoom: 18,
+      }).addTo(map);
+
+      L.marker([lat, lon]).addTo(map)
+        .bindPopup(label || 'Approximate location');
+    }
+
+    // Use IntersectionObserver to defer the map tile fetches until the map
+    // scrolls into view. Honest with the "two requests on load" claim.
+    function whenMapVisible(cb) {
+      const el = document.getElementById('map');
+      if (!('IntersectionObserver' in window)) { cb(); return; }
+      const io = new IntersectionObserver((entries) => {
+        if (entries.some(e => e.isIntersecting)) {
+          io.disconnect();
+          cb();
+        }
+      }, { rootMargin: '100px' });
+      io.observe(el);
+    }
+
+    // ---- FACTS ------------------------------------------------------------
+    // Hardcoded fallbacks so the page is never sad if the API is down.
+    const FALLBACK_FACTS = [
+      "Octopuses have three hearts, nine brains, and blue blood.",
+      "Honey never spoils — archaeologists have eaten 3,000-year-old honey from Egyptian tombs.",
+      "Bananas are berries, but strawberries aren't.",
+      "A group of flamingos is called a 'flamboyance.'",
+      "Wombat poop is cube-shaped.",
+      "The Eiffel Tower can be 15 cm taller during summer due to thermal expansion.",
+      "Cows have best friends and get stressed when separated from them.",
+      "There are more trees on Earth than stars in the Milky Way.",
+      "A day on Venus is longer than a year on Venus.",
+      "Sharks predate trees — they've been around for about 400 million years; trees, ~350 million.",
+    ];
+
+    function randomFallbackFact() {
+      return FALLBACK_FACTS[Math.floor(Math.random() * FALLBACK_FACTS.length)];
+    }
+
+    async function fetchFact() {
+      try {
+        const r = await fetch('https://uselessfacts.jsph.pl/api/v2/facts/random?language=en');
+        if (!r.ok) throw new Error('fact fetch failed');
+        const data = await r.json();
+        if (data && data.text) return data.text;
+      } catch (_) { /* fall through */ }
+      return randomFallbackFact();
+    }
+
+    async function renderFact() {
+      const el = document.getElementById('factText');
+      const btn = document.getElementById('factButton');
+      btn.disabled = true;
+      const text = await fetchFact();
+      el.textContent = text;
+      btn.disabled = false;
+    }
+
+    // ---- BOOT -------------------------------------------------------------
+    (async function main() {
+
+      // Copy-as-curl button.
+      document.getElementById('copyCurl').addEventListener('click', async (e) => {
+        const cmd = 'curl ifconfig.me';
+        if (await copyToClipboard(cmd)) {
+          const btn = e.currentTarget;
+          const orig = btn.textContent;
+          btn.textContent = 'copied!';
+          setTimeout(() => { btn.textContent = orig; }, 1400);
+        }
+      });
+
+      // Fact button.
+      document.getElementById('factButton').addEventListener('click', renderFact);
+
+      // Fire the two main requests in parallel — IP lookup and fact.
+      const [info, _factDone] = await Promise.all([
+        fetchIpInfo(),
+        renderFact(),
+      ]);
+
+      if (!info) { renderIpError(); return; }
+
+      // Try to opportunistically fetch the OTHER address family. This is a
+      // third request, but it's small (~50 bytes) and gives a much better
+      // answer to "what is my IP" for dual-stack users.
+      const otherFamily = await fetchOtherFamily(info.type);
+
+      const blocks = [{ label: info.type, value: info.ip }];
+      if (otherFamily && otherFamily !== info.ip) {
+        blocks.push({
+          label: info.type === 'IPv4' ? 'IPv6' : 'IPv4',
+          value: otherFamily,
+        });
+      }
+      renderIp(blocks);
+      renderLocation(info);
+
+      whenMapVisible(() => {
+        const label = [info.city, info.country].filter(Boolean).join(', ')
+          || 'Approximate location';
+        initMap(info.lat, info.lon, label);
+      });
+    })();
+  </script>
+
+</body>
+</html>

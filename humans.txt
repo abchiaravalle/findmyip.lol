@@ -1,0 +1,26 @@
+/* TEAM */
+
+  Built by: Amplifi Studio
+  Site:     https://amplifi.studio
+  Location: Internet
+
+/* SITE */
+
+  Last update:  2026-05
+  Standards:    HTML5, CSS3, ES2022
+  Components:   Leaflet 1.9.4 (vendored locally)
+  Tiles:        OpenStreetMap
+  IP API:       ipwho.is (primary), ipapi.co (fallback)
+  Facts API:    uselessfacts.jsph.pl
+  Software:     None. Static HTML. No build step. No framework.
+
+/* PRIVACY */
+
+  Trackers:     0
+  Analytics:    0
+  Cookies:      0
+  Logs:         0 (there is no server)
+  Telemetry:    0
+  Ads:          0
+
+  If this changes, this file is wrong. Open an issue.

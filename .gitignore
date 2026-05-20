@@ -12,10 +12,13 @@
 # Logs (there shouldn't be any, but just in case)
 *.log
 
-# Local environment / secrets (this project doesn't use any, but defensively)
+# Local environment / secrets — NEVER commit these
 .env
 .env.*
 !.env.example
+.dev.vars
+.dev.vars.*
+.wrangler/
 
 # OS / misc
 Thumbs.db

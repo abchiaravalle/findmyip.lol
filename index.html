@@ -13,6 +13,14 @@
     3. tile.openstreetmap.org  -> map tiles, ONLY if you scroll the map into
                                   view (third-party — sees your IP per tile)
 
+  Opt-in network activity (only if YOU click "Email this to someone"):
+    /api/send -> same-origin. The Function POSTs to SMTP2GO to deliver an
+                 email summary. The SMTP2GO API key lives in the Function's
+                 environment, never in the browser. SMTP2GO keeps standard
+                 delivery logs (sender, recipient, subject, timestamp) for
+                 their own operational purposes — this is disclosed in the
+                 modal before you click send.
+
   No analytics: not Google, not Plausible, not Fathom, not Cloudflare Web
   Analytics. No telemetry of any kind from our code. No cookies set by this
   site or by Cloudflare for this site. The only thing written to your browser
@@ -500,6 +508,171 @@
     }
     .privacy-cta a:hover { border-bottom-style: solid; }
 
+    /* ---------- Inline send-email button ---------- */
+
+    .send-email-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-top: 1.25rem;
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--fg);
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      padding: 0.5rem 0.9rem;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: all .15s ease;
+    }
+    .send-email-btn:hover { color: var(--accent); border-color: var(--accent); }
+    .send-email-btn svg { width: 14px; height: 14px; }
+
+    /* ---------- Modal ---------- */
+
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.6);
+      display: none;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 4rem 1rem 1rem;
+      z-index: 100;
+      overflow-y: auto;
+    }
+    .modal-backdrop[open] { display: flex; animation: backdrop-fade .15s ease forwards; }
+    @keyframes backdrop-fade { from { opacity: 0; } to { opacity: 1; } }
+
+    .modal {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      max-width: 480px;
+      width: 100%;
+      padding: 1.75rem;
+      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.4);
+      transform: translateY(-8px);
+      animation: modal-rise .2s ease forwards;
+    }
+    @keyframes modal-rise { to { transform: none; } }
+
+    .modal-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 1.25rem;
+    }
+    .modal-head h3 { margin: 0; font-size: 1.05rem; font-weight: 600; color: var(--fg); }
+    .modal-close {
+      background: transparent;
+      border: none;
+      color: var(--fg-muted);
+      font-size: 1.5rem;
+      line-height: 1;
+      cursor: pointer;
+      padding: 0;
+      width: 1.5rem;
+      height: 1.5rem;
+    }
+    .modal-close:hover { color: var(--fg); }
+
+    .field {
+      display: block;
+      margin-bottom: 1rem;
+    }
+    .field label {
+      display: block;
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--fg-muted);
+      margin-bottom: 0.35rem;
+    }
+    .field input,
+    .field .field-value {
+      width: 100%;
+      padding: 0.6rem 0.8rem;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--fg);
+      font-family: var(--font-mono);
+      font-size: 0.9rem;
+      box-sizing: border-box;
+    }
+    .field input:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-dim);
+    }
+    .field .field-value { color: var(--fg-muted); user-select: text; }
+
+    .preview {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 0.9rem 1rem;
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      line-height: 1.6;
+      color: var(--fg-muted);
+      margin-bottom: 1rem;
+      max-height: 180px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
+    .preview strong { color: var(--fg); font-weight: 600; }
+
+    .modal-disclosure {
+      font-size: 0.78rem;
+      line-height: 1.5;
+      color: var(--fg-muted);
+      background: var(--accent-dim);
+      border-radius: var(--radius-sm);
+      padding: 0.75rem 0.9rem;
+      margin-bottom: 1.25rem;
+    }
+    .modal-disclosure a { color: var(--accent); text-decoration: none; }
+    .modal-disclosure a:hover { text-decoration: underline; }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.6rem;
+    }
+    .btn {
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      padding: 0.55rem 1rem;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: all .15s ease;
+    }
+    .btn-ghost {
+      background: transparent;
+      color: var(--fg-muted);
+    }
+    .btn-ghost:hover { color: var(--fg); border-color: var(--fg-muted); }
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+    .btn-primary:hover { filter: brightness(1.08); }
+    .btn-primary:disabled { opacity: 0.5; cursor: wait; filter: none; }
+
+    .modal-status {
+      margin-top: 0.9rem;
+      font-size: 0.85rem;
+      min-height: 1.2em;
+    }
+    .modal-status.ok    { color: var(--mint); }
+    .modal-status.err   { color: var(--danger); }
+
     /* ---------- Footer ---------- */
 
     footer.site-footer {
@@ -587,7 +760,7 @@
             <path d="M325.9,101.09c-.29-.68-.69-1.28-1.2-1.79s-1.11-.91-1.79-1.19c-.68-.28-1.43-.43-2.23-.43s-1.53.14-2.22.43c-.68.28-1.28.68-1.79,1.19s-.91,1.11-1.19,1.78-.43,1.41-.43,2.19.14,1.52.43,2.21c.29.69.69,1.29,1.2,1.8s1.11.91,1.8,1.2c.69.29,1.43.43,2.22.43s1.53-.14,2.21-.43c.68-.29,1.27-.69,1.78-1.2s.91-1.11,1.2-1.79c.29-.68.43-1.42.43-2.2s-.15-1.52-.43-2.2ZM323.72,105.2c-.29.55-.7.98-1.22,1.29s-1.13.47-1.83.47c-.51,0-.97-.09-1.4-.26-.43-.18-.8-.42-1.1-.74-.3-.32-.54-.71-.71-1.16-.17-.45-.26-.96-.26-1.5,0-.72.15-1.36.44-1.91s.7-.97,1.23-1.28c.52-.3,1.12-.46,1.81-.46.53,0,1,.09,1.43.26s.79.43,1.1.75c.31.33.55.71.71,1.16s.25.94.25,1.47c0,.73-.15,1.38-.44,1.92Z"/>
           </g>
         </svg>
-        <span class="domain">/ findmyip.lol</span>
+        <span class="domain">/ <span data-current-host>findmyip.lol</span></span>
       </a>
       <div class="header-actions">
         <a class="icon-btn" id="githubLink" href="https://github.com/abchiaravalle/findmyip.lol" target="_blank" rel="noopener noreferrer" aria-label="View source on GitHub" title="View source on GitHub">
@@ -663,6 +836,14 @@
           This is your ISP's approximate location, not yours. IP geolocation is often
           off by tens or hundreds of miles. The pin is a guess, not a tracker.
         </p>
+
+        <button class="send-email-btn" type="button" id="openEmailModal">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="3" y="5" width="18" height="14" rx="2"/>
+            <path d="M3 7l9 6 9-6"/>
+          </svg>
+          Email this to someone
+        </button>
       </section>
 
       <!-- ================================================================
@@ -689,7 +870,8 @@
           <li>We don't use analytics — no Google, no Plausible, no Fathom, no Cloudflare Web Analytics.</li>
           <li>We don't fingerprint your browser.</li>
           <li>One thing is stored in your browser: your light/dark theme preference, in <code>localStorage</code>. It never leaves your device.</li>
-          <li>Your browser contacts exactly three domains because of this site: <code>findmyip.lol</code> (this page, including <code>/api/ip</code>), <code>uselessfacts.jsph.pl</code> (the random fact), and — only if you scroll the map into view — <code>tile.openstreetmap.org</code>.</li>
+          <li>Your browser contacts exactly three domains because of this site: <code data-current-host>findmyip.lol</code> (this page, including <code>/api/ip</code>), <code>uselessfacts.jsph.pl</code> (the random fact), and — only if you scroll the map into view — <code>tile.openstreetmap.org</code>.</li>
+          <li>If you click <em>Email this to someone</em>, the page POSTs to <code>/api/send</code> and that Function relays one email via <a href="https://smtp2go.com" target="_blank" rel="noopener noreferrer">SMTP2GO</a> — they keep standard delivery logs. The modal discloses this before you send, and the feature is entirely opt-in.</li>
           <li>Cloudflare hosts the site, so Cloudflare's normal edge access logs exist (any hosted site has these). We have not added anything on top.</li>
           <li>Open DevTools → Network tab and verify it yourself.</li>
         </ul>
@@ -699,6 +881,51 @@
       </section>
 
     </main>
+
+    <!-- ====================================================================
+         EMAIL MODAL
+         The Send button POSTs to /api/send (Cloudflare Pages Function). The
+         SMTP2GO API key is read from env.SMTP2GO_API_KEY server-side and
+         never reaches the browser. The body of the email is generated on
+         the server from request.cf, not from anything the visitor types,
+         so this endpoint can't be used to relay arbitrary content.
+         ==================================================================== -->
+    <div class="modal-backdrop" id="emailModal" role="dialog" aria-modal="true" aria-labelledby="emailModalTitle" aria-hidden="true">
+      <div class="modal">
+        <div class="modal-head">
+          <h3 id="emailModalTitle">Email your IP info</h3>
+          <button class="modal-close" type="button" id="closeEmailModal" aria-label="Close">×</button>
+        </div>
+
+        <form id="emailForm" novalidate>
+          <div class="field">
+            <label for="emailFrom">From</label>
+            <div class="field-value">findmyip &lt;findmyip@amplifi.studio&gt;</div>
+          </div>
+
+          <div class="field">
+            <label for="emailTo">To</label>
+            <input id="emailTo" name="to" type="email" required autocomplete="off" placeholder="recipient@example.com">
+          </div>
+
+          <div class="field">
+            <label>Preview</label>
+            <div class="preview" id="emailPreview">Loading your IP info…</div>
+          </div>
+
+          <p class="modal-disclosure">
+            Sent through <a href="https://smtp2go.com" target="_blank" rel="noopener noreferrer">SMTP2GO</a>, which processes the message and keeps its own delivery logs (sender, recipient, subject, timestamp, status). The body is generated server-side from your edge data — you can't change what's sent.
+          </p>
+
+          <div class="modal-actions">
+            <button type="button" class="btn btn-ghost" id="cancelEmailModal">Cancel</button>
+            <button type="submit" class="btn btn-primary" id="sendEmailBtn">Send</button>
+          </div>
+
+          <p class="modal-status" id="emailStatus" aria-live="polite"></p>
+        </form>
+      </div>
+    </div>
 
     <footer class="site-footer">
       Built with ❤️ by <a href="https://amplifi.studio">amplifi.studio</a>
@@ -975,6 +1202,118 @@
       btn.disabled = false;
     }
 
+    // ---- DOMAIN SWAP ------------------------------------------------------
+    // The site is served from multiple hosts (e.g. findmyip.lol and
+    // findmyip.amplifi.studio). Replace every element marked
+    // [data-current-host] with the actual hostname so the visible copy
+    // matches the URL the visitor came in on. The default text in the HTML
+    // stays as "findmyip.lol" so view-source remains meaningful.
+    function applyCurrentHost() {
+      const host = (window.location && window.location.hostname) || 'findmyip.lol';
+      // Don't replace if we're on localhost / preview — keep the canonical
+      // brand in those cases.
+      const useDefault = !host || host === 'localhost' || /^127\./.test(host) || host.endsWith('.pages.dev');
+      const shown = useDefault ? 'findmyip.lol' : host;
+      document.querySelectorAll('[data-current-host]').forEach(el => {
+        el.textContent = shown;
+      });
+    }
+    applyCurrentHost();
+
+    // ---- EMAIL MODAL ------------------------------------------------------
+    // Keep the latest IP info around so the modal preview reflects what the
+    // server will actually send.
+    let latestInfo = null;
+
+    const emailModal       = document.getElementById('emailModal');
+    const emailForm        = document.getElementById('emailForm');
+    const emailTo          = document.getElementById('emailTo');
+    const emailPreview     = document.getElementById('emailPreview');
+    const emailStatus      = document.getElementById('emailStatus');
+    const sendEmailBtn     = document.getElementById('sendEmailBtn');
+    const openEmailBtn     = document.getElementById('openEmailModal');
+    const closeEmailBtn    = document.getElementById('closeEmailModal');
+    const cancelEmailBtn   = document.getElementById('cancelEmailModal');
+
+    function buildEmailPreview(info) {
+      if (!info) return 'Your IP info will appear here once it loads.';
+      const lines = [
+        `IP address:  ${info.ip}`,
+        `Type:        ${info.type}`,
+        `Location:    ${[info.city, info.region, info.country].filter(Boolean).join(', ') || 'unknown'}`,
+        `ISP:         ${info.isp || 'unknown'}`,
+        `ASN:         ${info.asn || 'unknown'}`,
+        `Timezone:    ${info.timezone || 'unknown'}`,
+      ];
+      if (info.lat != null && info.lon != null) lines.push(`Coordinates: ${info.lat}, ${info.lon}`);
+      return lines.join('\n');
+    }
+
+    function openEmailModal() {
+      emailPreview.textContent = buildEmailPreview(latestInfo);
+      emailStatus.textContent = '';
+      emailStatus.className = 'modal-status';
+      sendEmailBtn.disabled = false;
+      emailModal.setAttribute('open', '');
+      emailModal.setAttribute('aria-hidden', 'false');
+      // Focus the input on next tick so screen readers announce the dialog first.
+      setTimeout(() => emailTo.focus(), 0);
+    }
+    function closeEmailModal() {
+      emailModal.removeAttribute('open');
+      emailModal.setAttribute('aria-hidden', 'true');
+    }
+
+    openEmailBtn.addEventListener('click', openEmailModal);
+    closeEmailBtn.addEventListener('click', closeEmailModal);
+    cancelEmailBtn.addEventListener('click', closeEmailModal);
+    emailModal.addEventListener('click', (e) => {
+      // Click on the backdrop (not the modal body) closes the dialog.
+      if (e.target === emailModal) closeEmailModal();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && emailModal.hasAttribute('open')) closeEmailModal();
+    });
+
+    emailForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const to = emailTo.value.trim();
+      emailStatus.className = 'modal-status';
+      emailStatus.textContent = '';
+
+      if (!to) {
+        emailStatus.className = 'modal-status err';
+        emailStatus.textContent = 'Enter a recipient email.';
+        return;
+      }
+
+      sendEmailBtn.disabled = true;
+      emailStatus.textContent = 'Sending…';
+
+      try {
+        const r = await fetch('/api/send', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ to }),
+        });
+        const data = await r.json().catch(() => ({}));
+        if (r.ok && data.ok) {
+          emailStatus.className = 'modal-status ok';
+          emailStatus.textContent = `Sent to ${to}.`;
+          emailTo.value = '';
+          setTimeout(closeEmailModal, 1800);
+        } else {
+          emailStatus.className = 'modal-status err';
+          emailStatus.textContent = data.message || 'Could not send — try again in a moment.';
+          sendEmailBtn.disabled = false;
+        }
+      } catch (_) {
+        emailStatus.className = 'modal-status err';
+        emailStatus.textContent = 'Network error. Try again in a moment.';
+        sendEmailBtn.disabled = false;
+      }
+    });
+
     // ---- BOOT -------------------------------------------------------------
     (async function main() {
 
@@ -1000,6 +1339,7 @@
 
       if (!info) { renderIpError(); return; }
 
+      latestInfo = info;
       renderIp([{ label: info.type, value: info.ip }]);
       renderLocation(info);
 

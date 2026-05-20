@@ -59,7 +59,9 @@ Most "what is my IP" pages are advertising landfills with creepy data-collection
 - **HTML + CSS + vanilla JavaScript.** No framework, no bundler, no build step.
 - **[Leaflet 1.9.4](https://leafletjs.com/)** for the map, vendored locally in `/vendor` so nothing loads from a CDN.
 - **[OpenStreetMap](https://www.openstreetmap.org/)** tiles, attributed per their tile-usage policy.
-- **A single Cloudflare Pages Function** at `functions/api/ip.js` that returns your IP + geo from Cloudflare's edge (`request.cf`). No third-party IP-intelligence provider is involved — the lookup never leaves Cloudflare.
+- **Two Cloudflare Pages Functions**:
+  - `functions/api/ip.js` — returns the visitor's IP + geo from `request.cf`. No third-party IP-intelligence vendor; lookup never leaves Cloudflare.
+  - `functions/api/send.js` — opt-in: relays an email summary via SMTP2GO. The API key lives only in `env.SMTP2GO_API_KEY` (CF env var), never in the browser. Body is generated server-side from `request.cf` so the endpoint can't be abused to send arbitrary content. Per-IP 60s rate limit via the edge cache API.
 - **[uselessfacts.jsph.pl](https://uselessfacts.jsph.pl/)** for the random fact, with hardcoded fallbacks if the API is down.
 
 No npm install. No `node_modules`. No `package.json`. The deployed site is exactly what's in this repo.
@@ -92,7 +94,23 @@ python3 -m http.server 8000
 5. **Build output directory:** `/`
 6. Deploy.
 
-The `/functions/` directory is auto-detected and `functions/api/ip.js` becomes the live `/api/ip` endpoint with no config. CF serves everything gzipped + brotli automatically — gzipped page weight is under 70KB.
+The `/functions/` directory is auto-detected — `functions/api/ip.js` becomes `/api/ip` and `functions/api/send.js` becomes `/api/send` with no further config. CF serves everything gzipped + brotli automatically — gzipped page weight is under 70KB.
+
+**To enable the email feature**, add an environment variable on the deployed project:
+
+1. CF dashboard → your Pages project → **Settings** → **Environment variables**.
+2. Add `SMTP2GO_API_KEY` (Production scope) with your SMTP2GO API key. Mark it as a **Secret** so it's encrypted at rest and never echoed back.
+3. Trigger a redeploy so the new env var is bound to the running Functions.
+
+If `SMTP2GO_API_KEY` is not set, `/api/send` returns `503 not_configured` and the modal shows a friendly error — the rest of the site keeps working.
+
+For local dev, create a gitignored `.dev.vars` file at the project root:
+
+```
+SMTP2GO_API_KEY=api-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+`wrangler pages dev .` picks it up automatically.
 
 ### Other hosts (Netlify, GitHub Pages, etc.)
 
@@ -120,6 +138,7 @@ Here is exactly what happens when you open the page:
 | Email captures, popups, newsletters | **No.** |
 | Social-share buttons | **No.** (They're tracking vectors.) |
 | Commercial IP-intel vendor (ipinfo, MaxMind, ipapi, ipwho, ipify) sees your IP | **No.** The lookup runs in the `/api/ip` Pages Function using Cloudflare's own `request.cf` — no vendor is in the loop. |
+| Email feature uses third-party (SMTP2GO) | **Only if you click "Email this to someone."** The `/api/send` Function relays one email through SMTP2GO; the modal discloses this before send. The body is generated server-side from `request.cf` so the endpoint can't be misused to send arbitrary content. |
 
 The page makes these network requests on load:
 
@@ -145,7 +164,8 @@ Don't trust this README. Verify it:
 ├── index.html          # The whole app. Comments throughout.
 ├── functions/
 │   └── api/
-│       └── ip.js       # Cloudflare Pages Function — returns visitor IP + geo
+│       ├── ip.js       # Cloudflare Pages Function — returns visitor IP + geo
+│       └── send.js     # Cloudflare Pages Function — relays an email via SMTP2GO (opt-in)
 ├── vendor/
 │   ├── leaflet.js      # Leaflet 1.9.4, vendored
 │   └── leaflet.css

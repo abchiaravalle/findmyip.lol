@@ -3,9 +3,11 @@
   ============================================================================
   View source! No trackers, no analytics, no cookies. Verify it yourself.
   ============================================================================
-  This page makes exactly TWO outbound requests after load:
-    1. ipinfo.io (or api.ipapi.is fallback)  -> your IP + geolocation
-    2. uselessfacts.jsph.pl              -> a random fact
+  Network activity on load:
+    1. /api/ip            (THIS site, a Cloudflare Pages Function — your IP
+                          + geo are read directly from Cloudflare's edge,
+                          never sent to any third-party IP intel provider)
+    2. uselessfacts.jsph.pl   -> a random fact
 
   Plus map tiles from tile.openstreetmap.org IF you scroll the map into view.
 
@@ -679,7 +681,8 @@
           <li>We don't set cookies.</li>
           <li>We don't use analytics — no Google, no Plausible, no Fathom, nothing.</li>
           <li>We aren't building a profile on you.</li>
-          <li>This page makes a handful of outbound requests on load: one to <code>ipinfo.io</code> for your IP info, one to <code>uselessfacts.jsph.pl</code> for a fact, and a small probe to <code>api.ipify.org</code> to see if you have a second IP family. Map tiles from <code>tile.openstreetmap.org</code> load only if the map is on screen.</li>
+          <li>The IP lookup never leaves Cloudflare: <code>/api/ip</code> is a Pages Function on this same domain that reads your IP from Cloudflare's edge — no third-party IP-intel provider sees your address.</li>
+          <li>The only external request on load is <code>uselessfacts.jsph.pl</code> for the random fact. Map tiles from <code>tile.openstreetmap.org</code> load only if the map is on screen.</li>
           <li>Open DevTools → Network tab and verify it yourself.</li>
         </ul>
         <p class="privacy-cta">
@@ -770,30 +773,24 @@
     }
 
     // ---- IP LOOKUP --------------------------------------------------------
-    // Primary:  ipinfo.io/json    — generous free tier, real CORS, no key.
-    // Fallback: api.ipapi.is/     — also CORS-enabled, no key, bonus VPN flags.
+    // No third-party APIs. We call our OWN endpoint at /api/ip, which is a
+    // Cloudflare Pages Function (functions/api/ip.js). That Function reads
+    // the visitor's IP and geo data from `request.cf` — data Cloudflare
+    // already has because it's routing the request. Nothing leaves the
+    // Cloudflare edge that wasn't already there.
     //
-    // (Earlier versions of this file used ipwho.is + ipapi.co. ipwho.is moved
-    // CORS to a paid plan, and ipapi.co rate-limits very aggressively, so they
-    // were swapped out. If both providers below ever break the same way, just
-    // replace these two functions — no other code needs to change.)
+    // This means the privacy promise is real, not nominal: visiting this
+    // page does NOT cause your IP to be sent to ipinfo.io, ipapi.io, or any
+    // other commercial IP-intel provider. The only domain involved in the
+    // lookup is findmyip.lol itself.
     async function fetchIpInfo() {
       try {
-        const r = await fetch('https://ipinfo.io/json');
+        const r = await fetch('/api/ip', { cache: 'no-store' });
         if (r.ok) {
           const data = await r.json();
-          if (data && data.ip) return normalizeIpinfo(data);
+          if (data && data.ip) return normalizeEdge(data);
         }
-      } catch (_) { /* try fallback */ }
-
-      try {
-        const r = await fetch('https://api.ipapi.is/');
-        if (r.ok) {
-          const data = await r.json();
-          if (data && data.ip) return normalizeIpapiIs(data);
-        }
-      } catch (_) { /* both failed */ }
-
+      } catch (_) { /* fall through */ }
       return null;
     }
 
@@ -804,62 +801,27 @@
       return String.fromCodePoint(...[...cc].map(c => 0x1F1E6 - 65 + c.charCodeAt(0)));
     }
 
-    function normalizeIpinfo(d) {
-      // d.loc is "lat,lon"; d.org is "ASxxxxx Provider Name" — split them out.
-      const [latStr, lonStr] = (d.loc || '').split(',');
-      const orgMatch = /^AS(\d+)\s+(.*)$/.exec(d.org || '');
-      const asn = orgMatch ? ('AS' + orgMatch[1]) : null;
-      const isp = orgMatch ? orgMatch[2] : (d.org || null);
+    function normalizeEdge(d) {
       return {
         ip:       d.ip,
-        type:     (d.ip || '').includes(':') ? 'IPv6' : 'IPv4',
+        type:     d.type,
         city:     d.city,
         region:   d.region,
-        country:  d.country,             // ipinfo returns code, not name
+        country:  d.country,             // ISO alpha-2 code from Cloudflare
         flag:     ccToFlag(d.country),
-        lat:      latStr ? parseFloat(latStr) : null,
-        lon:      lonStr ? parseFloat(lonStr) : null,
-        isp:      isp,
-        org:      isp,
-        asn:      asn,
+        lat:      d.lat,
+        lon:      d.lon,
+        isp:      d.isp,
+        org:      d.isp,
+        asn:      d.asn,
         timezone: d.timezone,
       };
     }
 
-    function normalizeIpapiIs(d) {
-      const loc = d.location || {};
-      const asnObj = d.asn || {};
-      const company = d.company || {};
-      return {
-        ip:       d.ip,
-        type:     (d.ip || '').includes(':') ? 'IPv6' : 'IPv4',
-        city:     loc.city,
-        region:   loc.state,
-        country:  loc.country,
-        flag:     ccToFlag(loc.country_code),
-        lat:      loc.latitude,
-        lon:      loc.longitude,
-        isp:      company.name || asnObj.org,
-        org:      company.name || asnObj.org,
-        asn:      asnObj.asn ? ('AS' + asnObj.asn) : null,
-        timezone: loc.timezone,
-      };
-    }
-
-    // Also try to detect IPv6 if the primary lookup gave us IPv4 (and vice
-    // versa). Many ISPs expose both; we try a v6-only endpoint as a best-effort
-    // probe. Failure is silent — we just show whichever address(es) we found.
-    async function fetchOtherFamily(haveType) {
-      const url = haveType === 'IPv4'
-        ? 'https://api64.ipify.org?format=json'   // returns v6 if available
-        : 'https://api.ipify.org?format=json';    // v4
-      try {
-        const r = await fetch(url);
-        if (!r.ok) return null;
-        const j = await r.json();
-        return j && j.ip ? j.ip : null;
-      } catch (_) { return null; }
-    }
+    // (No dual-stack probe. The earlier version of this file hit api.ipify.org
+    // to opportunistically discover the OTHER IP family — but that's a third-
+    // party request we don't need. Whichever family you connected with is
+    // what we show; this keeps the "no third parties" promise absolute.)
 
     // ---- IP RENDERING -----------------------------------------------------
     function renderIp(blocks) {
@@ -893,8 +855,8 @@
     function renderIpError() {
       const container = document.getElementById('ipBlocks');
       container.innerHTML =
-        '<p class="error">Could not look up your IP — both providers failed. ' +
-        'Check your connection and try again.</p>';
+        '<p class="error">Couldn\'t determine your IP from the edge. ' +
+        'Try refreshing — this is rare and almost always transient.</p>';
     }
 
     // ---- LOCATION CARD ----------------------------------------------------
@@ -1029,19 +991,7 @@
 
       if (!info) { renderIpError(); return; }
 
-      // Try to opportunistically fetch the OTHER address family. This is a
-      // third request, but it's small (~50 bytes) and gives a much better
-      // answer to "what is my IP" for dual-stack users.
-      const otherFamily = await fetchOtherFamily(info.type);
-
-      const blocks = [{ label: info.type, value: info.ip }];
-      if (otherFamily && otherFamily !== info.ip) {
-        blocks.push({
-          label: info.type === 'IPv4' ? 'IPv6' : 'IPv4',
-          value: otherFamily,
-        });
-      }
-      renderIp(blocks);
+      renderIp([{ label: info.type, value: info.ip }]);
       renderLocation(info);
 
       whenMapVisible(() => {

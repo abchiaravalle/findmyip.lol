@@ -59,7 +59,7 @@ Most "what is my IP" pages are advertising landfills with creepy data-collection
 - **HTML + CSS + vanilla JavaScript.** No framework, no bundler, no build step.
 - **[Leaflet 1.9.4](https://leafletjs.com/)** for the map, vendored locally in `/vendor` so nothing loads from a CDN.
 - **[OpenStreetMap](https://www.openstreetmap.org/)** tiles, attributed per their tile-usage policy.
-- **[ipinfo.io](https://ipinfo.io/)** for IP geolocation (primary), with **[ipapi.is](https://ipapi.is/)** as a fallback. Both are free and require no API key.
+- **A single Cloudflare Pages Function** at `functions/api/ip.js` that returns your IP + geo from Cloudflare's edge (`request.cf`). No third-party IP-intelligence provider is involved — the lookup never leaves Cloudflare.
 - **[uselessfacts.jsph.pl](https://uselessfacts.jsph.pl/)** for the random fact, with hardcoded fallbacks if the API is down.
 
 No npm install. No `node_modules`. No `package.json`. The deployed site is exactly what's in this repo.
@@ -69,41 +69,37 @@ No npm install. No `node_modules`. No `package.json`. The deployed site is exact
 ```bash
 git clone https://github.com/abchiaravalle/findmyip.lol.git
 cd findmyip.lol
-open index.html
+npx wrangler@latest pages dev .
 ```
 
-That's it. Open `index.html` in any modern browser. Everything works from `file://`.
+This runs the Pages Function locally so `/api/ip` works. Visit `http://localhost:8788`. (Wrangler's IP lookup uses your machine's actual outbound IP, just like prod.)
 
-If you want a local server (some browsers handle clipboard APIs differently on `file://`):
+If you just want to preview the static HTML/CSS without the IP lookup working:
 
 ```bash
 python3 -m http.server 8000
-# then open http://localhost:8000
+# then open http://localhost:8000 — /api/ip will 404, page will show an error
 ```
 
 ## Deploying
 
-### Cloudflare Pages
+### Cloudflare Pages (recommended)
 
 1. Push this repo to GitHub.
-2. In the Cloudflare dashboard → **Pages** → **Connect to Git** → pick the repo.
-3. **Build command:** *(leave blank)*
-4. **Build output directory:** `/`
-5. Deploy.
+2. CF dashboard → **Workers & Pages** → **Create** → **Pages** → **Connect to Git** → pick the repo.
+3. Framework preset: **None**
+4. **Build command:** *(leave blank)*
+5. **Build output directory:** `/`
+6. Deploy.
 
-Cloudflare serves everything gzipped + brotli automatically. The page weight will land well under the 150KB target over the wire.
+The `/functions/` directory is auto-detected and `functions/api/ip.js` becomes the live `/api/ip` endpoint with no config. CF serves everything gzipped + brotli automatically — gzipped page weight is under 70KB.
 
-### Netlify
+### Other hosts (Netlify, GitHub Pages, etc.)
 
-1. Push to GitHub.
-2. Netlify → **Add new site** → **Import from Git** → pick the repo.
-3. **Build command:** *(leave blank)*
-4. **Publish directory:** `/`
-5. Deploy.
+The static parts of the site will deploy fine anywhere, but `/api/ip` requires Cloudflare Pages Functions. If you want to host elsewhere, you'll need to either:
 
-### Any static host
-
-Drop the entire repo into any web root. There is no server-side anything to configure.
+- Reintroduce a third-party IP-lookup API in `index.html` (`ipinfo.io/json` and `api.ipapi.is` are no-key, CORS-enabled options), accepting the privacy trade-off; or
+- Port `functions/api/ip.js` to your host's equivalent (Netlify Edge Functions, Vercel Edge, Deno Deploy, etc.).
 
 ## Privacy
 
@@ -120,15 +116,15 @@ This project's product is a no-tracking guarantee. Here is exactly what happens 
 | Third-party fonts | **No.** System font stack only. |
 | Email captures, popups, newsletters | **No.** |
 | Social-share buttons | **No.** (They're tracking vectors.) |
+| Third-party IP-intel provider sees your IP | **No.** The lookup happens at Cloudflare's edge via a Pages Function — nothing leaves CF. |
 
-The page makes these outbound requests on load:
+The page makes these network requests on load:
 
-1. `https://ipinfo.io/json` — your IP + geolocation (fallback: `https://api.ipapi.is/`)
-2. `https://api64.ipify.org` or `https://api.ipify.org` — best-effort lookup of the *other* IP family if you're dual-stack
-3. `https://uselessfacts.jsph.pl/api/v2/facts/random` — the random fact
-4. `https://tile.openstreetmap.org/...` — map tiles, **only** if you scroll the map into view
+1. `/api/ip` — **same-origin.** A Cloudflare Pages Function returns your IP, ASN, ISP, city, region, country, timezone, and approximate coordinates, all derived from `request.cf` at the CF edge. No third party involved.
+2. `https://uselessfacts.jsph.pl/api/v2/facts/random` — the random fact.
+3. `https://tile.openstreetmap.org/...` — map tiles, **only** if you scroll the map into view.
 
-None of these are owned by us. We never see your IP or location. None of them require an API key — you could swap them out yourself by editing `index.html`.
+The IP lookup never touches a commercial IP-intelligence vendor. The only domains your browser contacts as a *result* of using this site are `findmyip.lol` itself, `uselessfacts.jsph.pl`, and (if you scroll to the map) `tile.openstreetmap.org`.
 
 ## Verifying the no-tracking claim
 
@@ -144,6 +140,9 @@ Don't trust this README. Verify it:
 ```
 /
 ├── index.html          # The whole app. Comments throughout.
+├── functions/
+│   └── api/
+│       └── ip.js       # Cloudflare Pages Function — returns visitor IP + geo
 ├── vendor/
 │   ├── leaflet.js      # Leaflet 1.9.4, vendored
 │   └── leaflet.css

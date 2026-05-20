@@ -19,7 +19,8 @@
   Trackers:     0
   Analytics:    0
   Cookies:      0
-  Logs:         0 (there is no server)
+  App logs:     0 (the edge function writes nothing of its own)
+  Edge logs:    Cloudflare's standard access logs exist (true of any hosted site)
   Telemetry:    0
   Ads:          0
 

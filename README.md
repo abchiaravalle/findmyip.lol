@@ -10,7 +10,7 @@
 
 <p align="center">
   A privacy-respecting "What is my IP address?" tool by <a href="https://amplifi.studio">amplifi.studio</a>.<br>
-  Zero trackers. Zero analytics. Zero cookies. Zero ads. One static HTML file.
+  Zero trackers. Zero analytics. Zero cookies. Zero ads. One HTML file + one ~30-line edge function — that's the whole app.
 </p>
 
 <p align="center">
@@ -103,20 +103,23 @@ The static parts of the site will deploy fine anywhere, but `/api/ip` requires C
 
 ## Privacy
 
-This project's product is a no-tracking guarantee. Here is exactly what happens when you open the page:
+The differentiator here is honesty, not magic. Cloudflare hosts the site, so Cloudflare's standard edge logs exist — same as for any hosted site on the internet. The promise is that we add **nothing** on top of that, and that no commercial IP-intelligence vendor ever sees your address.
+
+Here is exactly what happens when you open the page:
 
 | Action | Happens? |
 |---|---|
-| HTTP request logged on our server | **No.** There is no server. The site is static. |
-| Cookies set | **No.** |
-| `localStorage` written | Only your theme preference (light/dark). Never sent anywhere. |
+| Application logs / database writes from our code | **No.** The Pages Function reads `request.cf` and returns it — no DB, no log line, no queue, no telemetry. |
+| Cloudflare's standard edge access logs exist | **Yes** — the same logs any hosted site has. We add nothing on top. |
+| Cookies set | **No.** Not by this site, not by Cloudflare for this site. |
+| `localStorage` written | Only your theme preference (light/dark). Never leaves your device. |
 | Analytics (Google, Plausible, Fathom, Cloudflare Web Analytics) | **No, none.** |
 | Browser fingerprinting | **No.** |
 | Third-party JS | **No.** Leaflet is vendored locally. |
 | Third-party fonts | **No.** System font stack only. |
 | Email captures, popups, newsletters | **No.** |
 | Social-share buttons | **No.** (They're tracking vectors.) |
-| Third-party IP-intel provider sees your IP | **No.** The lookup happens at Cloudflare's edge via a Pages Function — nothing leaves CF. |
+| Commercial IP-intel vendor (ipinfo, MaxMind, ipapi, ipwho, ipify) sees your IP | **No.** The lookup runs in the `/api/ip` Pages Function using Cloudflare's own `request.cf` — no vendor is in the loop. |
 
 The page makes these network requests on load:
 

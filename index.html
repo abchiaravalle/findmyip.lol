@@ -4,16 +4,23 @@
   View source! No trackers, no analytics, no cookies. Verify it yourself.
   ============================================================================
   Network activity on load:
-    1. /api/ip            (THIS site, a Cloudflare Pages Function — your IP
-                          + geo are read directly from Cloudflare's edge,
-                          never sent to any third-party IP intel provider)
-    2. uselessfacts.jsph.pl   -> a random fact
+    1. /api/ip                 -> same-origin. A Cloudflare Pages Function
+                                  (functions/api/ip.js) reads your IP + geo
+                                  from request.cf and returns them. NO third-
+                                  party IP-intelligence vendor (ipinfo,
+                                  MaxMind, ipapi, ipwho, ipify) is involved.
+    2. uselessfacts.jsph.pl    -> a random fact (third-party — sees your IP)
+    3. tile.openstreetmap.org  -> map tiles, ONLY if you scroll the map into
+                                  view (third-party — sees your IP per tile)
 
-  Plus map tiles from tile.openstreetmap.org IF you scroll the map into view.
+  No analytics: not Google, not Plausible, not Fathom, not Cloudflare Web
+  Analytics. No telemetry of any kind from our code. No cookies set by this
+  site or by Cloudflare for this site. The only thing written to your browser
+  is your theme preference, kept in localStorage on your device.
 
-  No Google Analytics. No Plausible. No Fathom. No first-party telemetry.
-  No cookies are set. No localStorage is read or written, except the theme
-  preference (your own choice, stored in your own browser, never sent anywhere).
+  Cloudflare hosts the site, so its standard edge access logs exist (true of
+  any site hosted on any provider). We do not add or read anything beyond
+  what Cloudflare keeps by default.
 
   Source: https://github.com/abchiaravalle/findmyip.lol
   ============================================================================
@@ -676,13 +683,14 @@
       <section class="card privacy-card delay-3" aria-labelledby="privacy-heading">
         <h2 id="privacy-heading">What we don't know about you</h2>
         <ul class="privacy-list">
-          <li>We didn't log this request — there's no server-side code at all.</li>
-          <li>We don't know your browser fingerprint.</li>
-          <li>We don't set cookies.</li>
-          <li>We don't use analytics — no Google, no Plausible, no Fathom, nothing.</li>
-          <li>We aren't building a profile on you.</li>
-          <li>The IP lookup never leaves Cloudflare: <code>/api/ip</code> is a Pages Function on this same domain that reads your IP from Cloudflare's edge — no third-party IP-intel provider sees your address.</li>
-          <li>The only external request on load is <code>uselessfacts.jsph.pl</code> for the random fact. Map tiles from <code>tile.openstreetmap.org</code> load only if the map is on screen.</li>
+          <li>We don't run logging, analytics, or telemetry of our own. The <code>/api/ip</code> Function reads Cloudflare's edge data and returns it — no database, no file write, no queue, no log line we keep.</li>
+          <li>No commercial IP-intelligence vendor (ipinfo, MaxMind, ipapi, ipwho, ipify, etc.) ever sees your address. Cloudflare's edge already knew your IP because it routed this request to you; the Function just hands the same information back to the page.</li>
+          <li>We don't set cookies. Cloudflare doesn't set any for this site either.</li>
+          <li>We don't use analytics — no Google, no Plausible, no Fathom, no Cloudflare Web Analytics.</li>
+          <li>We don't fingerprint your browser.</li>
+          <li>One thing is stored in your browser: your light/dark theme preference, in <code>localStorage</code>. It never leaves your device.</li>
+          <li>Your browser contacts exactly three domains because of this site: <code>findmyip.lol</code> (this page, including <code>/api/ip</code>), <code>uselessfacts.jsph.pl</code> (the random fact), and — only if you scroll the map into view — <code>tile.openstreetmap.org</code>.</li>
+          <li>Cloudflare hosts the site, so Cloudflare's normal edge access logs exist (any hosted site has these). We have not added anything on top.</li>
           <li>Open DevTools → Network tab and verify it yourself.</li>
         </ul>
         <p class="privacy-cta">
@@ -705,9 +713,10 @@
     /* =========================================================================
        findmyip.lol — main script
        -------------------------------------------------------------------------
-       Everything that follows runs in your browser, not on a server. There is
-       no server. This file is served as a static asset. We do not — and cannot
-       — log anything.
+       Everything that follows runs in your browser. The only piece of code
+       that runs server-side is functions/api/ip.js (a Cloudflare Pages
+       Function), which reads request.cf and returns it — no logging, no DB,
+       no persistence of any kind from our code.
        =========================================================================
     */
 

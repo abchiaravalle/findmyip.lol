@@ -508,25 +508,53 @@
     }
     .privacy-cta a:hover { border-bottom-style: solid; }
 
-    /* ---------- Inline send-email button ---------- */
+    /* ---------- Hero CTA: Email this to someone ---------- */
+
+    .hero-cta {
+      margin-top: 2.25rem;
+      display: flex;
+      justify-content: center;
+    }
 
     .send-email-btn {
       display: inline-flex;
       align-items: center;
-      gap: 0.5rem;
-      margin-top: 1.25rem;
-      background: transparent;
-      border: 1px solid var(--border);
-      color: var(--fg);
-      font-family: var(--font-mono);
-      font-size: 0.85rem;
-      padding: 0.5rem 0.9rem;
-      border-radius: var(--radius-sm);
+      gap: 0.65rem;
+      background: var(--accent);
+      border: 1px solid var(--accent);
+      color: #fff;
+      font-family: var(--font-sans);
+      font-weight: 600;
+      font-size: 1rem;
+      padding: 0.85rem 1.5rem;
+      border-radius: 999px;
       cursor: pointer;
-      transition: all .15s ease;
+      transition: transform .15s ease, box-shadow .15s ease, filter .15s ease;
+      box-shadow: 0 8px 24px var(--accent-dim);
+      letter-spacing: -0.005em;
     }
-    .send-email-btn:hover { color: var(--accent); border-color: var(--accent); }
-    .send-email-btn svg { width: 14px; height: 14px; }
+    .send-email-btn:hover {
+      filter: brightness(1.06);
+      transform: translateY(-1px);
+      box-shadow: 0 12px 28px var(--accent-dim);
+    }
+    .send-email-btn:active {
+      transform: translateY(0);
+      box-shadow: 0 4px 12px var(--accent-dim);
+    }
+    .send-email-btn:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 3px;
+    }
+    .send-email-btn svg {
+      width: 20px;
+      height: 20px;
+      flex-shrink: 0;
+    }
+
+    @media (max-width: 480px) {
+      .send-email-btn { width: 100%; justify-content: center; }
+    }
 
     /* ---------- Modal ---------- */
 
@@ -812,6 +840,16 @@
         <button class="copy-curl" type="button" id="copyCurl" title="Copy a terminal command that prints your IP">
           curl ifconfig.me
         </button>
+
+        <div class="hero-cta">
+          <button class="send-email-btn" type="button" id="openEmailModal">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3" y="5" width="18" height="14" rx="2"/>
+              <path d="M3 7l9 6 9-6"/>
+            </svg>
+            <span>Email this to someone</span>
+          </button>
+        </div>
       </section>
 
       <!-- ================================================================
@@ -836,14 +874,6 @@
           This is your ISP's approximate location, not yours. IP geolocation is often
           off by tens or hundreds of miles. The pin is a guess, not a tracker.
         </p>
-
-        <button class="send-email-btn" type="button" id="openEmailModal">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <rect x="3" y="5" width="18" height="14" rx="2"/>
-            <path d="M3 7l9 6 9-6"/>
-          </svg>
-          Email this to someone
-        </button>
       </section>
 
       <!-- ================================================================

@@ -143,10 +143,11 @@ Here is exactly what happens when you open the page:
 The page makes these network requests on load:
 
 1. `/api/ip` — **same-origin.** A Cloudflare Pages Function returns your IP, ASN, ISP, city, region, country, timezone, and approximate coordinates, all derived from `request.cf` at the CF edge. No third party involved.
-2. `https://uselessfacts.jsph.pl/api/v2/facts/random` — the random fact.
-3. `https://tile.openstreetmap.org/...` — map tiles, **only** if you scroll the map into view.
+2. `https://ipv4.icanhazip.com` and `https://ipv6.icanhazip.com` — two single-stack IP echoes (Cloudflare-run) that return **only** your address (no geo, no logging product). Each hostname resolves to exactly one address family, so we can display your IPv4 **and** IPv6 with correct labels. A family is skipped if your network can't reach it. These are third parties and do see your IP.
+3. `https://uselessfacts.jsph.pl/api/v2/facts/random` — the random fact.
+4. `https://tile.openstreetmap.org/...` — map tiles, **only** if you scroll the map into view.
 
-The IP lookup never touches a commercial IP-intelligence vendor. The only domains your browser contacts as a *result* of using this site are `findmyip.lol` itself, `uselessfacts.jsph.pl`, and (if you scroll to the map) `tile.openstreetmap.org`.
+No *commercial IP-intelligence* vendor (ipinfo, MaxMind, ipapi, ipwho, ipify) is ever in the loop — geo always comes from Cloudflare's own `request.cf`. The icanhazip echoes are plain address reflectors, used solely to learn your second address family.
 
 ## Verifying the no-tracking claim
 

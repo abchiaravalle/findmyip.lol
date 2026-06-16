@@ -9,8 +9,14 @@
                                   from request.cf and returns them. NO third-
                                   party IP-intelligence vendor (ipinfo,
                                   MaxMind, ipapi, ipwho, ipify) is involved.
-    2. uselessfacts.jsph.pl    -> a random fact (third-party — sees your IP)
-    3. tile.openstreetmap.org  -> map tiles, ONLY if you scroll the map into
+    2. ipv4.icanhazip.com      -> single-stack IPv4 echo (third-party — sees
+       ipv6.icanhazip.com         your IP). Cloudflare-run, returns ONLY the
+                                  address, no geo. Lets us show your IPv4 AND
+                                  IPv6 with correct labels; each host resolves
+                                  to one family only. Skipped per-family if
+                                  that family isn't reachable.
+    3. uselessfacts.jsph.pl    -> a random fact (third-party — sees your IP)
+    4. tile.openstreetmap.org  -> map tiles, ONLY if you scroll the map into
                                   view (third-party — sees your IP per tile)
 
   Opt-in network activity (only if YOU click "Email this to someone"):
@@ -994,8 +1000,8 @@
               <line x1="10.88" y1="21.94" x2="15.46" y2="14"/>
             </svg>
             <div class="pg-text">
-              <span class="pg-title">3 domains, that's it</span>
-              <span class="pg-desc"><code data-current-host>findmyip.lol</code>, <code>uselessfacts.jsph.pl</code>, and <code>tile.openstreetmap.org</code> (only if you view the map).</span>
+              <span class="pg-title">4 domains, that's it</span>
+              <span class="pg-desc"><code data-current-host>findmyip.lol</code>, <code>icanhazip.com</code> (a plain IP echo, so we can show both your IPv4 and IPv6), <code>uselessfacts.jsph.pl</code>, and <code>tile.openstreetmap.org</code> (only if you view the map).</span>
             </div>
           </li>
           <li>
@@ -1207,10 +1213,50 @@
       };
     }
 
-    // (No dual-stack probe. The earlier version of this file hit api.ipify.org
-    // to opportunistically discover the OTHER IP family — but that's a third-
-    // party request we don't need. Whichever family you connected with is
-    // what we show; this keeps the "no third parties" promise absolute.)
+    // ---- DUAL-STACK PROBE --------------------------------------------------
+    // To show BOTH your IPv4 and IPv6 address, we query two dedicated
+    // single-stack endpoints. Each hostname resolves to only ONE address
+    // family (one has A records only, the other AAAA records only), so the
+    // connection is pinned to that family and the address it returns is
+    // guaranteed to be of that type:
+    //
+    //   ipv4.icanhazip.com -> A records only    (always returns your IPv4)
+    //   ipv6.icanhazip.com -> AAAA records only (always returns your IPv6)
+    //
+    // If a family isn't reachable (e.g. your network has no IPv6 at all) that
+    // probe simply fails and we just show whatever we do have. Worst case is
+    // a single address, never a wrong label.
+    const FAMILY_HOSTS = {
+      IPv4: 'https://ipv4.icanhazip.com',
+      IPv6: 'https://ipv6.icanhazip.com',
+    };
+
+    const IPV4_RE = /^(\d{1,3}\.){3}\d{1,3}$/;
+
+    // Returns a validated IP string of the expected family, or null.
+    async function fetchFamilyIp(url, expect) {
+      try {
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), 6000);
+        const r = await fetch(url, { cache: 'no-store', signal: ctrl.signal });
+        clearTimeout(t);
+        if (r.ok) {
+          const ip = (await r.text()).trim();
+          const ok = expect === 'IPv4' ? IPV4_RE.test(ip) : ip.includes(':');
+          if (ip && ok) return ip;
+        }
+      } catch (_) { /* family unreachable — fall through to null */ }
+      return null;
+    }
+
+    // Probe both families in parallel. Returns { IPv4: ip|null, IPv6: ip|null }.
+    async function fetchBothFamilies() {
+      const [v4, v6] = await Promise.all([
+        fetchFamilyIp(FAMILY_HOSTS.IPv4, 'IPv4'),
+        fetchFamilyIp(FAMILY_HOSTS.IPv6, 'IPv6'),
+      ]);
+      return { IPv4: v4, IPv6: v6 };
+    }
 
     // ---- IP RENDERING -----------------------------------------------------
     function renderIp(blocks) {
@@ -1484,22 +1530,45 @@
       // Fact button.
       document.getElementById('factButton').addEventListener('click', renderFact);
 
-      // Fire the two main requests in parallel — IP lookup and fact.
-      const [info, _factDone] = await Promise.all([
+      // Fire the main requests in parallel — primary IP lookup, the dual-stack
+      // family probes, and the fact.
+      const [info, families, _factDone] = await Promise.all([
         fetchIpInfo(),
+        fetchBothFamilies(),
         renderFact(),
       ]);
 
-      if (!info) { renderIpError(); return; }
+      // Location/geo comes only from the same-origin edge lookup.
+      const geo = info;
+      if (geo) latestInfo = geo;
 
-      latestInfo = info;
-      renderIp([{ label: info.type, value: info.ip }]);
-      renderLocation(info);
+      // Build the address blocks. Start from the single-stack family probes
+      // (IPv4 first, then IPv6), then make sure the primary connection's IP is
+      // represented too. Dedupe by value so we never show the same address twice.
+      const blocks = [];
+      const seen = new Set();
+      const addBlock = (label, value) => {
+        if (!value || seen.has(value)) return;
+        seen.add(value);
+        blocks.push({ label, value });
+      };
+      if (families.IPv4) addBlock('IPv4', families.IPv4);
+      if (families.IPv6) addBlock('IPv6', families.IPv6);
+      if (info)          addBlock(info.type, info.ip);
+
+      if (blocks.length === 0) { renderIpError(); return; }
+
+      // Keep IPv4 above IPv6 for a stable, predictable order.
+      blocks.sort((a, b) => (a.label === b.label ? 0 : a.label === 'IPv4' ? -1 : 1));
+
+      renderIp(blocks);
+      if (geo) renderLocation(geo);
 
       whenMapVisible(() => {
-        const label = [info.city, info.country].filter(Boolean).join(', ')
+        if (!geo) return;
+        const label = [geo.city, geo.country].filter(Boolean).join(', ')
           || 'Approximate location';
-        initMap(info.lat, info.lon, label);
+        initMap(geo.lat, geo.lon, label);
       });
     })();
   </script>

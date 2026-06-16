@@ -286,6 +286,18 @@
       outline: 2px solid var(--accent);
       outline-offset: 4px;
     }
+    /* "Not available" state — e.g. no IPv6 on this network. Muted, not a button. */
+    .ip-display.unavailable {
+      color: var(--fg-dim);
+      font-weight: 400;
+      font-size: clamp(1.1rem, 4vw, 1.6rem);
+      cursor: default;
+      opacity: 0.65;
+    }
+    .ip-display.unavailable:hover {
+      background: transparent;
+      color: var(--fg-dim);
+    }
 
     .ip-label {
       display: block;
@@ -1260,28 +1272,37 @@
 
     // ---- IP RENDERING -----------------------------------------------------
     function renderIp(blocks) {
-      // blocks: [{ label: "IPv4"|"IPv6", value: "1.2.3.4" }, ...]
+      // blocks: [{ label: "IPv4"|"IPv6", value: "1.2.3.4" | null }, ...]
+      // A null value renders a muted "Not available" row (e.g. no IPv6).
       const container = document.getElementById('ipBlocks');
       container.innerHTML = '';
       blocks.forEach(({ label, value }) => {
         const wrap = document.createElement('div');
         wrap.className = 'ip-block';
 
-        const btn = document.createElement('button');
-        btn.className = 'ip-display';
-        btn.type = 'button';
-        btn.textContent = value;
-        btn.setAttribute('aria-label', `${label} address ${value}, click to copy`);
-        btn.addEventListener('click', async () => {
-          if (await copyToClipboard(value)) flashCopied(btn, `Copied ${label}!`);
-          else flashCopied(btn, 'Copy failed — select & copy manually');
-        });
+        if (value) {
+          const btn = document.createElement('button');
+          btn.className = 'ip-display';
+          btn.type = 'button';
+          btn.textContent = value;
+          btn.setAttribute('aria-label', `${label} address ${value}, click to copy`);
+          btn.addEventListener('click', async () => {
+            if (await copyToClipboard(value)) flashCopied(btn, `Copied ${label}!`);
+            else flashCopied(btn, 'Copy failed — select & copy manually');
+          });
+          wrap.appendChild(btn);
+        } else {
+          const span = document.createElement('span');
+          span.className = 'ip-display unavailable';
+          span.textContent = `No ${label} available`;
+          span.setAttribute('aria-label', `No ${label} address available on this network`);
+          wrap.appendChild(span);
+        }
 
         const lbl = document.createElement('span');
         lbl.className = 'ip-label';
         lbl.textContent = label;
 
-        wrap.appendChild(btn);
         wrap.appendChild(lbl);
         container.appendChild(wrap);
       });
@@ -1542,26 +1563,21 @@
       const geo = info;
       if (geo) latestInfo = geo;
 
-      // Build the address blocks. Start from the single-stack family probes
-      // (IPv4 first, then IPv6), then make sure the primary connection's IP is
-      // represented too. Dedupe by value so we never show the same address twice.
-      const blocks = [];
-      const seen = new Set();
-      const addBlock = (label, value) => {
-        if (!value || seen.has(value)) return;
-        seen.add(value);
-        blocks.push({ label, value });
-      };
-      if (families.IPv4) addBlock('IPv4', families.IPv4);
-      if (families.IPv6) addBlock('IPv6', families.IPv6);
-      if (info)          addBlock(info.type, info.ip);
+      // Resolve each family's address. Prefer the dedicated single-stack probe;
+      // fall back to the primary connection's IP if it matches that family.
+      let v4 = families.IPv4 || (info && info.type === 'IPv4' ? info.ip : null);
+      let v6 = families.IPv6 || (info && info.type === 'IPv6' ? info.ip : null);
 
-      if (blocks.length === 0) { renderIpError(); return; }
+      // If we got literally nothing, the edge lookup failed — show the error.
+      if (!v4 && !v6 && !info) { renderIpError(); return; }
 
-      // Keep IPv4 above IPv6 for a stable, predictable order.
-      blocks.sort((a, b) => (a.label === b.label ? 0 : a.label === 'IPv4' ? -1 : 1));
+      // Always render BOTH rows so the absence of a family is explicit
+      // ("No IPv6 available") rather than a silently missing line. IPv4 first.
+      renderIp([
+        { label: 'IPv4', value: v4 },
+        { label: 'IPv6', value: v6 },
+      ]);
 
-      renderIp(blocks);
       if (geo) renderLocation(geo);
 
       whenMapVisible(() => {
